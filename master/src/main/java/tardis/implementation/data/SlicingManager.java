@@ -28,7 +28,7 @@ import jbse.val.Value;
 import jbse.val.WideningConversion;
 
 /**
- * Class that applies a slicing procedure to a
+ * Class that applies a slicing procedure to the
  * path conditions starting from the last clause, i.e., a 
  * transitive closure of the dependencies between the clauses of a path condition
  * in relation to the last clause of the path condition itself, where the dependencies
@@ -39,7 +39,7 @@ import jbse.val.WideningConversion;
  */
 
 final class SlicingManager {
-    static String[][] slice(List<Clause> path) {
+    static String[][] slice(List<Clause> path) { //in this new implementation, the context is also returned
         final Object[] clauseArray = shorten(path).toArray();
         final String pathConditionToString = stringifyTestPathCondition(path);
         //split pc clauses into array
@@ -110,16 +110,26 @@ final class SlicingManager {
         //deletes of general clauses of generalArray in the same position of null values in clauseArrayInput
         final List<String> valuesSpecific = new ArrayList<>();
         final List<String> valuesGeneral = new ArrayList<>();
+        final List<String> contextSpecific = new ArrayList<>(); //new, context (specific)
+        final List<String> contextGeneral = new ArrayList<>(); //new, context (general)
+        
         for (int k = 0; k < clauseArrayInput.length; ++k) {
             if (clauseArrayInput[k] != null) { 
                 valuesSpecific.add(specificArray[k]);
                 valuesGeneral.add(generalArray[k]);
             }
+            else { //new
+            	contextSpecific.add(specificArray[k]);
+            	contextGeneral.add(generalArray[k]);
+            }
         }
+        
         final String[] specificArrayOutput = valuesSpecific.toArray(new String[valuesSpecific.size()]);
         final String[] generalArrayOutput = valuesGeneral.toArray(new String[valuesGeneral.size()]);
+        final String[] contextSpecificArrayOutput = contextSpecific.toArray(new String[contextSpecific.size()]); //new
+        final String[] contextGeneralArrayOutput = contextGeneral.toArray(new String[contextGeneral.size()]); //new
 
-        final String[][] output = {specificArrayOutput, generalArrayOutput};
+        final String[][] output = {specificArrayOutput, generalArrayOutput, contextSpecificArrayOutput, contextGeneralArrayOutput};
         return output;
     }
 
