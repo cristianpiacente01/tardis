@@ -575,12 +575,12 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final boolean feasible = result.getLabel();
         final int ranking = result.getRanking();
         
-        final int indexInfeasibility = ranking; // no voting for now
+        final int indexInfeasibility = ranking; //no voting for now
         
         final int[] rankingArray = queueRanking();
-        if (indexInfeasibility != rankingArray[0]) { // priority != max
+        if (indexInfeasibility != rankingArray[0]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
-        	if (oldIndexInfeasibility != indexInfeasibility) { // could be the same because this method is invoked in the class PerformerJBSE too
+        	if (oldIndexInfeasibility != indexInfeasibility) { //could be the same because this method is invoked in the class PerformerJBSE too
 	        	LOGGER.info("[updateIndexInfeasibility, NOT MAX, unknown = %b, ranking = %d, feasible = %b] Changed the infeasibility index from %d to %d, path = %s", 
 	        			unknown, ranking, feasible, oldIndexInfeasibility, indexInfeasibility, stringifyPostFrontierPathCondition(path));
         	}

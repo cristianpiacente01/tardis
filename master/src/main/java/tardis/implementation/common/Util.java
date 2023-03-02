@@ -356,8 +356,8 @@ public final class Util {
         return retVal;
     }
     
-    public static boolean doubleEquals(double a, double b) { //new in the new implementation
-    	return Math.abs(a - b) < 0.000001d; // this should be the correct way to check if two floating point values are equal, not the == operator
+    public static boolean doubleEquals(double a, double b) {
+    	return Math.abs(a - b) < 0.000001d; //this should be the correct way to check if two floating point values are equal, not the == operator
     }
     
     /**
