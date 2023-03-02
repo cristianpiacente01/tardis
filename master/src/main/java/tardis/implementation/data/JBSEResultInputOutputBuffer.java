@@ -1,6 +1,7 @@
 package tardis.implementation.data;
 
 import static tardis.implementation.common.Util.filterOnPattern;
+import static tardis.implementation.common.Util.stringifyPostFrontierPathCondition;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -15,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import jbse.mem.Clause;
 import tardis.Options;
@@ -32,6 +36,9 @@ import tardis.implementation.jbse.JBSEResult;
  * @param <E> the type of the items stored in the buffer.
  */
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
+	/** The logger. */
+	private static final Logger LOGGER = LogManager.getFormatterLogger(JBSEResultInputOutputBuffer.class);
+	
     /** The maximum value for the index of improvability. */
     private static final int INDEX_IMPROVABILITY_MAX = 10;
     
@@ -120,7 +127,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private static final int[] QUEUE_PROBABILITIES_3_INDICES = {50, 30, 15, 5};
     
     /** The K value for the KNN classifier. */
-    private static final int K = 3;
+    private static final int K = 1; //useless for now in this new implementation, TODO in the future make the classifier work with K > 1 too
     
     /** The KNN classifier used to calculate the infeasibility index. */
     private final ClassifierKNN classifier = new ClassifierKNN(K);
@@ -219,7 +226,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     public JBSEResult poll(long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException {
         //chooses the index considering the different probabilities
         final Random random = new Random();
-        int randomValue = random.nextInt(100); //sum of PROBABILITY_VALUES
+        final int randomValue = random.nextInt(100); //sum of PROBABILITY_VALUES
         int sum = 0;
         int j = 0;
         do {
@@ -361,9 +368,11 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     public synchronized void updateIndexInfeasibilityAndReclassify() {
         synchronized (this.treePath) {
+        	//LOGGER.info("[reclassify] Current trainingSetSize: %d", this.trainingSetSize);
             //reclassifies the queued items only if this.trainingSetSize is big enough
             if (this.trainingSetSize >= this.trainingSetMinimumThreshold) {
                 forAllQueuedItems((queueNumber, bufferedJBSEResult) -> {
+                	LOGGER.info("[reclassify] This never gets printed...");
                 	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
                     final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
                     updateIndexInfeasibility(entryPoint, pathCondition);
@@ -371,6 +380,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                     if (queueNumberNew != queueNumber) {
                         this.queues.get(queueNumber).remove(bufferedJBSEResult);
                         this.queues.get(queueNumberNew).add(bufferedJBSEResult);
+                        if (queueNumberNew < queueNumber) {
+                        	LOGGER.info("[reclassify] New queue number (%d) is lower than the old one (%d), path condition: %s", 
+                        			queueNumberNew, queueNumber, stringifyPostFrontierPathCondition(pathCondition));
+                        }
                     }
                 });
                 this.trainingSetSize = 0;
@@ -560,27 +573,29 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final ClassificationResult result = this.classifier.classify(bloomFilter);
         final boolean unknown = result.isUnknown();
         final boolean feasible = result.getLabel();
-        final int voting = result.getVoting();
-        //averageDistance not used by now
-        final int indexInfeasibility;
-        if (unknown || (!feasible && voting == K)) {
-            indexInfeasibility = 0;
-        } else if (!feasible && voting < K) {
-            indexInfeasibility = 1;
-        } else if (feasible && voting < K) {
-            indexInfeasibility = 2;
-        } else { //feasible && voting == K
-            indexInfeasibility = 3;
+        final int ranking = result.getRanking();
+        
+        final int indexInfeasibility = ranking; // no voting for now
+        
+        final int[] rankingArray = queueRanking();
+        if (indexInfeasibility != rankingArray[0]) { // priority != max
+        	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
+        	if (oldIndexInfeasibility != indexInfeasibility) { // could be the same because this method is invoked in the class PerformerJBSE too
+	        	LOGGER.info("[updateIndexInfeasibility, unknown = %b, ranking = %d, feasible = %b] Changed the infeasibility index from %d to %d, path = %s", 
+	        			unknown, ranking, feasible, oldIndexInfeasibility, indexInfeasibility, stringifyPostFrontierPathCondition(path));
+        	}
         }
+        
+        
         this.treePath.setIndexInfeasibility(entryPoint, path, indexInfeasibility);
     }
-
+    
     private void forAllQueuedItems(BiConsumer<Integer, JBSEResult> toDo) {
-        for (int queue : this.queues.keySet()) {
-            for (JBSEResult bufferedJBSEResult : this.queues.get(queue)) {
-                toDo.accept(queue, bufferedJBSEResult);
-            }
-        }
+	    for (int queue : this.queues.keySet()) {
+	    	for (JBSEResult bufferedJBSEResult : this.queues.get(queue)) {
+	    		toDo.accept(queue, bufferedJBSEResult);
+	        }
+	    }
     }                    
     
     private void forAllQueuedItemsToUpdateImprovability(BiConsumer<Integer, JBSEResult> toDo) {
