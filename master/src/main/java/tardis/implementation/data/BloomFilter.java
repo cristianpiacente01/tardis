@@ -3,8 +3,9 @@ package tardis.implementation.data;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
-
 import jbse.mem.Clause;
+
+//(why is there no javadoc description of the class?)
 
 final class BloomFilter {
     /** Prime numbers for hash function calculation. */
@@ -19,25 +20,42 @@ final class BloomFilter {
     /** The size of the filter as a vector */
     private static final int SIZE = N_ROWS * N_COLUMNS;
 
+    /** The Bloom filter structure used only for the context */
     private final BitSet[] bloomFilterStructure;
-
+    
+    /** The specific (concrete) infeasibility core, the conditions are stored in an array of strings to avoid using two Bloom filter structures in total */
+    private final String[] specificInfeasibilityCore;
+    
+    /** The general (abstract) infeasibility core, also stored in an array of strings */
+    private final String[] generalInfeasibilityCore;
+    
+    /** The specific context in the form of array of strings just for logging purposes */
+    private final String[] specificContext;
+    
+    
     BloomFilter(List<Clause> path) {
         this.bloomFilterStructure = new BitSet[N_ROWS];
         for (int i = 0; i < bloomFilterStructure.length; ++i){
             this.bloomFilterStructure[i] = new BitSet(N_COLUMNS);
         }
+        
         final String[][] outputSliced = SlicingManager.slice(path);
-        final String[] specificArraySliced = outputSliced[0];
-        final String[] generalArraySliced = outputSliced[1];
-        fillBloomFilterStructure(specificArraySliced, generalArraySliced);
+        this.specificInfeasibilityCore = outputSliced[0];
+        this.generalInfeasibilityCore = outputSliced[1];
+        
+        this.specificContext = outputSliced[2];
+        
+        String[] generalContext = outputSliced[3];
+        
+        fillBloomFilterStructure(specificContext, generalContext);
     }
 
-    private void fillBloomFilterStructure(String[] specificArraySliced, String[] generalArraySliced) {
-        for (int i = 0; i < specificArraySliced.length; i++) {
-            //applies different hash functions to the general and specific condition
+    private void fillBloomFilterStructure(String[] specificContext, String[] generalContext) {
+        for (int i = 0; i < specificContext.length; i++) {
+            //applies different hash functions to the general and specific context conditions
             for (int j = 0; j < PRIME_NUMBERS.length; j++) {
-                final long hashGeneral = 31 * PRIME_NUMBERS[j] + generalArraySliced[i].hashCode();
-                final long hashSpecific = 31 * PRIME_NUMBERS[j] + specificArraySliced[i].hashCode();
+                final long hashGeneral = 31 * PRIME_NUMBERS[j] + generalContext[i].hashCode();
+                final long hashSpecific = 31 * PRIME_NUMBERS[j] + specificContext[i].hashCode();
                 final long hashToPositiveGeneral = hash(Math.abs(hashGeneral));
                 final long hashToPositiveSpecific = hash(Math.abs(hashSpecific));
                 //resize the hashes in the range of the dimension of the two-dimensional array
@@ -63,6 +81,7 @@ final class BloomFilter {
     }
     
     double jaccardDistance(BloomFilter other) {
+    	//the (context) JACCARD DISTANCE, NOT the SIMILARITY COEFFICIENT which was returned in the old implementation!
         final double retVal;
         if (other == null) {
             retVal = 0.0d;
@@ -78,7 +97,13 @@ final class BloomFilter {
             }
             retVal = both / (both + atLeastOne);
         }
-        return retVal;
+        return 1.0d - retVal; //distance = 1 - similarity coefficient, this is the proper jaccard distance
+    }
+    
+    boolean containsOtherCore(BloomFilter other, boolean specific) {
+    	//check if this core contains other's core (concrete or abstract depending on the specific flag)
+    	return specific ? Arrays.asList(this.specificInfeasibilityCore).containsAll(Arrays.asList(other.specificInfeasibilityCore))
+    			: Arrays.asList(this.generalInfeasibilityCore).containsAll(Arrays.asList(other.generalInfeasibilityCore));
     }
     
     private boolean get(int n) {
@@ -111,5 +136,33 @@ final class BloomFilter {
             return false;
         }
         return true;
+    }
+    
+    public String getSpecificCoreString() {
+    	//used for logging purposes
+    	String retVal = "";
+    	for (String str : specificInfeasibilityCore) {
+    		if (retVal.isEmpty()) {
+    			retVal = str;
+    		}
+    		else {
+    			retVal += " && " + str;
+    		}
+    	}
+    	return retVal;
+    }
+    
+    public String getSpecificContextString() {
+    	//used for logging purposes
+    	String retVal = "";
+    	for (String str : specificContext) {
+    		if (retVal.isEmpty()) {
+    			retVal = str;
+    		}
+    		else {
+    			retVal += " && " + str;
+    		}
+    	}
+    	return retVal;
     }
 }
