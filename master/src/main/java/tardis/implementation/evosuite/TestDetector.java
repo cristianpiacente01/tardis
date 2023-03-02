@@ -29,7 +29,7 @@ import tardis.implementation.jbse.JBSEResult;
  * @author Pietro Braione
  */
 final class TestDetector implements Runnable {
-    private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
+    private static final Logger LOGGER = LogManager.getFormatterLogger(TestDetector.class);
     
 	private final PerformerEvosuite performerEvosuite;
 	private final Options o;
