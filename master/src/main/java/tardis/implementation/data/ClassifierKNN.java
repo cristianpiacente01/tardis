@@ -48,7 +48,7 @@ final class ClassifierKNN {
     		return ClassificationResult.unknown(); //too small
     	}
     	
-    	//for every item in the training set, calculate the neighbor's ranking (floating point value) and store it + the label and the BloomFilter instance
+    	//for every item in the training set, calculate the neighbor's ranking (floating point value) and store it and the label
     	final ArrayList<Neighbor> neighbors = new ArrayList<>();
     	
     	BloomFilter first = null, second = null; //we'll check if first contains second (considering their cores)
@@ -96,7 +96,7 @@ final class ClassifierKNN {
         		ranking = 0.0d;
         	}
         	
-        	neighbors.add(new Neighbor(ranking, item.getLabel(), itemBloomFilter));
+        	neighbors.add(new Neighbor(ranking, item.getLabel()));
         }
         
         //infeasible first, then higher ranking first (descending order)
@@ -142,12 +142,10 @@ final class ClassifierKNN {
     private static class Neighbor {
     	private final double ranking; //the distance isn't needed because it's 1 - the decimal part
     	private final boolean label; //true iff feasible
-    	private final BloomFilter bloomFilter; //needed in the classify method
         
-    	private Neighbor(double ranking, boolean label, BloomFilter bloomFilter) {
+    	private Neighbor(double ranking, boolean label) {
     		this.ranking = ranking;
-    		this.label = label;  	    
-    		this.bloomFilter = bloomFilter;
+    		this.label = label;
     	}
     }
 
