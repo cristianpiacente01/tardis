@@ -46,7 +46,7 @@ final class SlicingManager {
         final String[] generalArray = pathConditionToString.split(" && ");
         final String[] specificArray = pathConditionToString.split(" && ");
         //generate general clauses
-        for (int i = 0; i < generalArray.length; i++){
+        for (int i = 0; i < generalArray.length; ++i){
             generalArray[i] = generalArray[i].replaceAll("[0-9]", "");
         }
         

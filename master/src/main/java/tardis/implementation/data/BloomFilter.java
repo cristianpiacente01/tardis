@@ -45,15 +45,15 @@ final class BloomFilter {
         
         this.specificContext = outputSliced[2];
         
-        String[] generalContext = outputSliced[3];
+        final String[] generalContext = outputSliced[3];
         
         fillBloomFilterStructure(specificContext, generalContext);
     }
 
     private void fillBloomFilterStructure(String[] specificContext, String[] generalContext) {
-        for (int i = 0; i < specificContext.length; i++) {
+        for (int i = 0; i < specificContext.length; ++i) {
             //applies different hash functions to the general and specific context conditions
-            for (int j = 0; j < PRIME_NUMBERS.length; j++) {
+            for (int j = 0; j < PRIME_NUMBERS.length; ++j) {
                 final long hashGeneral = 31 * PRIME_NUMBERS[j] + generalContext[i].hashCode();
                 final long hashSpecific = 31 * PRIME_NUMBERS[j] + specificContext[i].hashCode();
                 final long hashToPositiveGeneral = hash(Math.abs(hashGeneral));
