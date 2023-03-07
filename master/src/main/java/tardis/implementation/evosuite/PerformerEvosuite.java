@@ -673,13 +673,13 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     private ArrayList<String> buildEvoSuiteCommandCommon(String targetClass) {
         final ArrayList<String> retVal = new ArrayList<>();
         retVal.add(this.o.getJava8Command());
-        //retVal.add("-Xmx4G");
+        retVal.add("-Xmx4G");
         retVal.add("-jar");
         retVal.add(this.o.getEvosuitePath().toString());
         retVal.add("-class");
         retVal.add(targetClass);
-        //retVal.add("-mem");
-        //retVal.add("2048");
+        retVal.add("-mem");
+        retVal.add("2048");
         retVal.add("-Dmock_if_no_generator=false");
         retVal.add("-Dreplace_system_in=false");
         retVal.add("-Dreplace_gui=false");

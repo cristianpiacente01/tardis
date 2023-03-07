@@ -224,7 +224,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
         final String targetClass = this.o.getTargetClass();
         final ArrayList<String> retVal = new ArrayList<>();
         retVal.add(this.o.getJava8Command());
-        //retVal.add("-Xmx4G");
+        retVal.add("-Xmx4G");
         retVal.add("-jar");
         retVal.add(this.o.getEvosuitePath().toString());
     	retVal.add("-class");
@@ -233,8 +233,8 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
         } else {
         	retVal.add(targetClass.replace('/', '.'));
         }
-        //retVal.add("-mem");
-        //retVal.add("2048");
+        retVal.add("-mem");
+        retVal.add("2048");
         /*if (targetClass != null && this.o.getVisibility() == Visibility.PUBLIC) {
         	final StringBuilder optionMethod = new StringBuilder();
         	optionMethod.append("-Dtarget_method_list=\"");
