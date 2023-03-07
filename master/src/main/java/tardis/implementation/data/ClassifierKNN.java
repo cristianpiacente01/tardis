@@ -54,6 +54,14 @@ final class ClassifierKNN {
     	BloomFilter first = null, second = null; //we'll check if first contains second (considering their cores)
     	//they're declared here so we can reuse the same variables
     	
+    	//TODO remove this, it's just for logging purposes
+    	int nInf = 0;
+    	for (TrainingItem item : this.trainingSet)
+    		if (!item.getLabel())
+    			++nInf;
+    	
+    	LOGGER.info("[classify] There are %d training items and %d of them are infeasible", this.trainingSet.size(), nInf);
+    	
         for (TrainingItem item : this.trainingSet) {
         	final BloomFilter itemBloomFilter = item.getBloomFilter(); //item's BloomFilter structure, used to check for a relation
         	

@@ -31,8 +31,8 @@ final class BloomFilter {
     
     /** The specific context in the form of array of strings just for logging purposes */
     private final String[] specificContext;
-    
-    
+
+
     BloomFilter(List<Clause> path) {
         this.bloomFilterStructure = new BitSet[N_ROWS];
         for (int i = 0; i < bloomFilterStructure.length; ++i){
@@ -99,7 +99,7 @@ final class BloomFilter {
         }
         return 1.0d - retVal; //distance = 1 - similarity coefficient, this is the proper jaccard distance
     }
-    
+	
     boolean containsOtherCore(BloomFilter other, boolean specific) {
     	//check if this core contains other's core (concrete or abstract depending on the specific flag)
     	return specific ? Arrays.asList(this.specificInfeasibilityCore).containsAll(Arrays.asList(other.specificInfeasibilityCore))

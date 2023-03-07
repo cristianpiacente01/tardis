@@ -66,12 +66,13 @@ final class TestDetector implements Runnable {
         this.in = in;
     }
 
-    @Override
+	@Override
     public void run() {
         //reads/copies the standard input and detects the generated tests
         final HashSet<Integer> generated = new HashSet<>();
         try {
-            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+), \\w+\\z");
+            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE.*EvoSuiteWrapper_(\\d+).*,.*\\z");
+            
             String line;
             while ((line = this.evosuiteBufferedReader.readLine()) != null) {
                 if (Thread.interrupted()) {
@@ -91,7 +92,9 @@ final class TestDetector implements Runnable {
                     generated.add(testCount);
                     final JBSEResult item = this.items.get(testCount - this.testCountInitial);
                     try {
+                    	LOGGER.info("[run] before checkTestCompileAndScheduleJBSE");
                         this.performerEvosuite.checkTestCompileAndScheduleJBSE(testCount, item);
+                        LOGGER.info("[run] after checkTestCompileAndScheduleJBSE");
                     } catch (NoTestFileException e) {
                         LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
                         //continue
@@ -145,11 +148,16 @@ final class TestDetector implements Runnable {
                 }
             }
         }
+        
+        //TODO remove this, it's just for logging purposes
+        LOGGER.info("[run] items size: %d", this.items.size());
+        int count = -1;
 
         //ended reading EvoSuite log file: determines the test that
         //were not generated
         int testCount = this.testCountInitial;
         for (JBSEResult item : this.items) {
+        	LOGGER.info("[run] item %d", ++count);
             if (!generated.contains(testCount)) {
                 //logs the items whose test cases were not generated
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
@@ -164,8 +172,13 @@ final class TestDetector implements Runnable {
                 	this.in.updateIndexInfeasibilityAndReclassify();
                 }
             }
+            else {
+            	LOGGER.info("[run] a test case was generated");
+            }
             ++testCount;
         }
+        
+        LOGGER.info("[end run]");
     }
 }
 

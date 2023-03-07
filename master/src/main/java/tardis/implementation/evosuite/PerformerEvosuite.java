@@ -56,6 +56,7 @@ import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
+import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.common.NoJavaCompilerException;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
@@ -67,7 +68,7 @@ import tardis.implementation.jbse.JBSEResult;
  * 
  * @author Pietro Braione
  */
-public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
+public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExecutor<JBSEResult, EvosuiteResult> {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
     
     private final List<List<String>> visibleTargetMethods;
@@ -84,7 +85,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
-        super(in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
         this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
@@ -124,19 +125,28 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     }
 
     @Override
-    protected Runnable makeJob(List<JBSEResult> items) {
-        while (this.stopForSeeding) ; //ugly spinlocking
+    protected void executeJob(List<JBSEResult> items, Object... args) {
+    	LOGGER.info("[begin executeJob]");
         final int testCountInitial = this.testCount;
         final boolean isSeed = items.stream().map(JBSEResult::isSeed).reduce(true, (a, b) -> a && b); 
         if (isSeed) {
             this.stopForSeeding = true;
+        	generateTestsAndScheduleJBSESeed(testCountInitial, items);
         } else {
             this.testCount += items.size();
+            generateTestsAndScheduleJBSE(testCountInitial, items);
+            
         }
-        final Runnable job = (isSeed ? 
-                              () -> generateTestsAndScheduleJBSESeed(testCountInitial, items) :
-                              () -> generateTestsAndScheduleJBSE(testCountInitial, items));
-        return job;
+        LOGGER.info("[end executeJob]");
+    }
+
+    @Override
+    protected Runnable makeJob(List<JBSEResult> items) {
+    	LOGGER.info("[begin makeJob]");
+    	while (this.stopForSeeding) ; //ugly spinlocking
+    	final Runnable retVal = super.makeJob(items);
+    	LOGGER.info("[end makeJob]");
+        return retVal; //TODO remove logs and return super.makeJob(items)
     }
 
     /**
@@ -416,13 +426,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
         //splits items in sublists having same target method
         final List<List<JBSEResult>> splitItems = new ArrayList<>();
-        for (int i = 0; i < items.size() / this.o.getNumMOSATargets(); ++i) {
+        for (int i = 0; i < items.size() / this.o.getNumTargetsEvosuitePerJob(); ++i) {
         	final int start = i * items.size();
         	final int end = (i + 1) * items.size();
         	splitItems.add(items.subList(start, end));
         }
-        if (items.size() % this.o.getNumMOSATargets() != 0) {
-        	splitItems.add(items.subList((items.size() / this.o.getNumMOSATargets()) * items.size(), items.size()));
+        if (items.size() % this.o.getNumTargetsEvosuitePerJob() != 0) {
+        	splitItems.add(items.subList((items.size() / this.o.getNumTargetsEvosuitePerJob()) * items.size(), items.size()));
         }
 
         //launches an EvoSuite process for each sublist
@@ -663,13 +673,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private ArrayList<String> buildEvoSuiteCommandCommon(String targetClass) {
         final ArrayList<String> retVal = new ArrayList<>();
         retVal.add(this.o.getJava8Command());
-        retVal.add("-Xmx4G");
+        //retVal.add("-Xmx4G");
         retVal.add("-jar");
         retVal.add(this.o.getEvosuitePath().toString());
         retVal.add("-class");
         retVal.add(targetClass);
-        retVal.add("-mem");
-        retVal.add("2048");
+        //retVal.add("-mem");
+        //retVal.add("2048");
         retVal.add("-Dmock_if_no_generator=false");
         retVal.add("-Dreplace_system_in=false");
         retVal.add("-Dreplace_gui=false");
@@ -763,8 +773,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @throws IOException if thrown by {@link ProcessBuilder#start()}.
      */
     private Process launchProcess(List<String> commandLine) throws IOException {
+    	LOGGER.info("[begin launchProcess]");
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true);
         final Process pr = pb.start();
+        LOGGER.info("[end launchProcess]");
         return pr;
     }
 
@@ -779,8 +791,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @throws IOException if thrown by {@link ProcessBuilder#start()}.
      */
     private Process launchProcess(List<String> commandLine, Path logFilePath) throws IOException {
+    	LOGGER.info("[begin launchProcess]");
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true).redirectOutput(logFilePath.toFile());
         final Process pr = pb.start();
+        LOGGER.info("[end launchProcess]");
         return pr;
     }
 
@@ -798,8 +812,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void checkTestExists(String className) 
     throws NoSuchMethodException, SecurityException, NoClassDefFoundError, ClassNotFoundException {
+    	LOGGER.info("[begin checkTestExists]");
         final URLClassLoader cloader = URLClassLoader.newInstance(this.classpathTestURLClassLoader); 
         cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
+        LOGGER.info("[end checkTestExists]");
     }
 
     /**
@@ -822,6 +838,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
+    	LOGGER.info("[begin checkTestCompileAndScheduleJBSE]");
         //checks if EvoSuite generated the files
         final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
         final Path testCaseScaff = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + "_scaffolding.java"));
@@ -832,6 +849,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (testCaseScaff != null && !testCaseScaff.toFile().exists()) {
             throw new NoTestFileScaffoldingException(testCaseScaff);
         }
+        
+        LOGGER.info("[checkTestCompileAndScheduleJBSE] before compiling the test");
 
         //compiles the generated test
         final Path javacLogFilePath = this.o.getTmpTestsDirectoryPath().resolve("javac-log-test-" +  testCount + ".txt");
@@ -851,6 +870,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         } catch (IOException e) {
             throw new IOFileCreationException(e, javacLogFilePath);
         }
+        
+        LOGGER.info("[checkTestCompileAndScheduleJBSE] after compiling the test");
 
         //creates the TestCase and schedules it for further exploration
         try {
@@ -859,6 +880,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
+            LOGGER.info("[end checkTestCompileAndScheduleJBSE]");
         } catch (NoSuchMethodException e) { 
             throw new NoTestMethodException(testCase, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
