@@ -18,7 +18,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.logging.log4j.LogManager;
@@ -49,7 +48,6 @@ import jbse.val.ReferenceSymbolic;
 import tardis.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
-import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
@@ -88,10 +86,8 @@ implements PerformerEvosuiteListener {
 
     @Override
     protected void executeJob(List<EvosuiteResult> items, Object... args) {
-    	LOGGER.info("[begin executeJob]");
-        final EvosuiteResult item = items.get(0);
+    	final EvosuiteResult item = items.get(0);
         explore(item, item.getStartDepth());
-        LOGGER.info("[end executeJob]");
     }
 
     /**
@@ -102,7 +98,6 @@ implements PerformerEvosuiteListener {
      * @param depthStart the depth to which generation of tests must be started.
      */
     private void explore(EvosuiteResult item, int depthStart) {
-    	LOGGER.info("[begin explore]");
         if (this.o.getMaxDepth() <= 0) {
             return;
         }
@@ -125,8 +120,6 @@ implements PerformerEvosuiteListener {
             }
             final String entryPoint = item.getTargetMethodSignature();
             final List<Clause> pathConditionFinal = stateFinal.getPathCondition();
-            
-            LOGGER.info("[explore before feedback]");
 
             //prints some feedback
             LOGGER.info("Run test case %s, path condition %s:%s", tc.getClassName(), entryPoint, stringifyTestPathCondition(pathConditionFinal));
@@ -155,8 +148,6 @@ implements PerformerEvosuiteListener {
         		branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
             }
         	final long pathCoverage = this.pathCoverage.incrementAndGet();
-        	
-        	LOGGER.info("[explore before coverage feedback]");
 
             //emits coverage feedback
         	LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
@@ -184,7 +175,6 @@ implements PerformerEvosuiteListener {
             final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
             try {
 				createOutputJobsForFrontiersAtAllDepths(rp, item, tc, stateInitial, stateFinal, depthStart, depthFinal);
-				LOGGER.info("[end explore]");
 			} catch (InterruptedException e) {
 				//the performer shut down
 				return;
@@ -292,7 +282,6 @@ implements PerformerEvosuiteListener {
             if (coverageType == Coverage.BRANCHES) {
                 LOGGER.info("Test case %s covered branch%s %s", tc.getClassName(), (branchCoverageTargetNew == 1 ? " " : "es"), String.join(", ", newCoveredBranches));
             }
-            
             //copies the test in out
             try {
                 //gets the source and destination paths of the test source file

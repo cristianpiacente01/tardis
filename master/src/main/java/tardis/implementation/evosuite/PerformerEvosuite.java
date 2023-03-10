@@ -85,8 +85,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
-        super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
-        this.visibleTargetMethods = getTargets(o);
+    	super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
+    	this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
             throw new NoJavaCompilerException();
@@ -126,7 +126,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
 
     @Override
     protected void executeJob(List<JBSEResult> items, Object... args) {
-    	LOGGER.info("[begin executeJob]");
+    	//assert(args == null); //args is always null and not even used...
         final int testCountInitial = this.testCount;
         final boolean isSeed = items.stream().map(JBSEResult::isSeed).reduce(true, (a, b) -> a && b); 
         if (isSeed) {
@@ -135,18 +135,13 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         } else {
             this.testCount += items.size();
             generateTestsAndScheduleJBSE(testCountInitial, items);
-            
         }
-        LOGGER.info("[end executeJob]");
     }
 
     @Override
     protected Runnable makeJob(List<JBSEResult> items) {
-    	LOGGER.info("[begin makeJob]");
     	while (this.stopForSeeding) ; //ugly spinlocking
-    	final Runnable retVal = super.makeJob(items);
-    	LOGGER.info("[end makeJob]");
-        return retVal; //TODO remove logs and return super.makeJob(items)
+    	return super.makeJob(items);
     }
 
     /**
@@ -773,10 +768,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
      * @throws IOException if thrown by {@link ProcessBuilder#start()}.
      */
     private Process launchProcess(List<String> commandLine) throws IOException {
-    	LOGGER.info("[begin launchProcess]");
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true);
         final Process pr = pb.start();
-        LOGGER.info("[end launchProcess]");
         return pr;
     }
 
@@ -791,10 +784,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
      * @throws IOException if thrown by {@link ProcessBuilder#start()}.
      */
     private Process launchProcess(List<String> commandLine, Path logFilePath) throws IOException {
-    	LOGGER.info("[begin launchProcess]");
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true).redirectOutput(logFilePath.toFile());
         final Process pr = pb.start();
-        LOGGER.info("[end launchProcess]");
         return pr;
     }
 
@@ -812,10 +803,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
      */
     private void checkTestExists(String className) 
     throws NoSuchMethodException, SecurityException, NoClassDefFoundError, ClassNotFoundException {
-    	LOGGER.info("[begin checkTestExists]");
         final URLClassLoader cloader = URLClassLoader.newInstance(this.classpathTestURLClassLoader); 
         cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
-        LOGGER.info("[end checkTestExists]");
     }
 
     /**
@@ -838,7 +827,6 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
-    	LOGGER.info("[begin checkTestCompileAndScheduleJBSE]");
         //checks if EvoSuite generated the files
         final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
         final Path testCaseScaff = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + "_scaffolding.java"));
@@ -849,8 +837,6 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         if (testCaseScaff != null && !testCaseScaff.toFile().exists()) {
             throw new NoTestFileScaffoldingException(testCaseScaff);
         }
-        
-        LOGGER.info("[checkTestCompileAndScheduleJBSE] before compiling the test");
 
         //compiles the generated test
         final Path javacLogFilePath = this.o.getTmpTestsDirectoryPath().resolve("javac-log-test-" +  testCount + ".txt");
@@ -870,8 +856,6 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         } catch (IOException e) {
             throw new IOFileCreationException(e, javacLogFilePath);
         }
-        
-        LOGGER.info("[checkTestCompileAndScheduleJBSE] after compiling the test");
 
         //creates the TestCase and schedules it for further exploration
         try {
@@ -880,7 +864,6 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
-            LOGGER.info("[end checkTestCompileAndScheduleJBSE]");
         } catch (NoSuchMethodException e) { 
             throw new NoTestMethodException(testCase, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {

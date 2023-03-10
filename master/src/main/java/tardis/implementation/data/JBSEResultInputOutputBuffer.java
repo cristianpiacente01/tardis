@@ -387,7 +387,6 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     public synchronized void updateIndexInfeasibilityAndReclassify() {
         synchronized (this.treePath) {
-			LOGGER.info("[reclassify] Current trainingSetSize: %d", this.trainingSetSize);
             //reclassifies the queued items only if this.trainingSetSize is big enough
             if (this.trainingSetSize >= this.trainingSetMinimumThreshold) {
                 forAllQueuedItems((queueNumber, bufferedJBSEResult) -> {

@@ -18,7 +18,7 @@ public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E
 
     @Override
     public boolean add(E item) {
-        return this.queue.add(item);
+    	return this.queue.add(item);
     }
 
     @Override

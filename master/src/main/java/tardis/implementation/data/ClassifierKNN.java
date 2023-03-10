@@ -51,16 +51,8 @@ final class ClassifierKNN {
     	//for every item in the training set, calculate the neighbor's ranking (floating point value) and store it and the label
     	final ArrayList<Neighbor> neighbors = new ArrayList<>();
     	
-    	BloomFilter first = null, second = null; //we'll check if first contains second (considering their cores)
-    	//they're declared here so we can reuse the same variables
-    	
-    	//TODO remove this, it's just for logging purposes
-    	int nInf = 0;
-    	for (TrainingItem item : this.trainingSet)
-    		if (!item.getLabel())
-    			++nInf;
-    	
-    	LOGGER.info("[classify] There are %d training items and %d of them are infeasible", this.trainingSet.size(), nInf);
+    	int numberOfInfeasible = 0; //it counts how many items in the training set are infeasible
+    	//used later for finding (if needed) the top neighbor feasible easily
     	
         for (TrainingItem item : this.trainingSet) {
         	final BloomFilter itemBloomFilter = item.getBloomFilter(); //item's BloomFilter structure, used to check for a relation
@@ -69,30 +61,23 @@ final class ClassifierKNN {
         	
         	final double averageDistance = query.jaccardDistance(itemBloomFilter); //context distance
         	
-        	//as said before, if first's core contains second's core we have a relation
-        	first = null;
-        	second = null;
+        	//if the item is feasible, we have a relation if
+    		//the item contains the query, otherwise if the query contains the item
+    		
+    		//e.g. we have A && B && C && D feasible in the training set
+    		//and our query is A && B && C
+    		
+    		//e.g. we have A && B && C infeasible in the training set
+    		//and our query is A && B && C && D
         	
-        	if (item.getLabel()) {
-        		//if the item is feasible, we have a relation if
-        		//the item contains the query
-        		
-        		//e.g. we have A && B && C && D feasible in the training set
-        		//and our query is A && B && C
-        		
-        		first = itemBloomFilter;
-        		second = query;
-        	}
-        	else {
-        		//if the item is infeasible, we have a relation if
-        		//the query contains the item
-        		
-        		//e.g. we have A && B && C infeasible in the training set
-        		//and our query is A && B && C && D
-        		
-        		first = query;
-        		second = itemBloomFilter;
-        	}
+        	
+        	//we'll check if first contains second (considering their cores)
+        	
+        	final BloomFilter first = item.getLabel() ? itemBloomFilter : query;
+        	final BloomFilter second = item.getLabel() ? query : itemBloomFilter; 
+        	
+        	
+        	//if first's core contains second's core we have a relation
         	
         	if (first.containsOtherCore(second, true)) { //specific (concrete) core
         		ranking = 2.0d + (1.0d - averageDistance); //2 + similarity coefficient
@@ -102,6 +87,11 @@ final class ClassifierKNN {
         	}
         	else {
         		ranking = 0.0d;
+        	}
+        	
+        	//update numberOfInfeasible
+        	if (!item.getLabel()) {
+        		++numberOfInfeasible;
         	}
         	
         	neighbors.add(new Neighbor(ranking, item.getLabel()));
@@ -120,18 +110,10 @@ final class ClassifierKNN {
         	return ClassificationResult.unknown();
         }
         
+        assert(numberOfInfeasible < neighbors.size());; //it should always exist
         
-        Neighbor topNeighborFeasible = null;
-        
-        //search for the top neighbor feasible if it exists (it should always exist)
-        for (int i = 1; i < neighbors.size(); ++i) {
-        	if (neighbors.get(i).label) {
-        		topNeighborFeasible = neighbors.get(i);
-        		break;
-        	}
-        }
-        
-        //assert(topNeighborFeasible != null);
+        Neighbor topNeighborFeasible = neighbors.get(numberOfInfeasible);
+        //e.g. if we have 3 items and 1 is infeasible then the top neighbor feasible is the second one (index = 1)
         
     	//let's compare the top neighbor infeasible and the top neighbor feasible, both exist
         
