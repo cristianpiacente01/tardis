@@ -27,18 +27,14 @@ public abstract class PerformerPausableFixedThreadPoolExecutor<I,O> extends Perf
      * @param numOfThreads The number of concurrent threads that this {@link PerformerPausableFixedThreadPoolExecutor} encapsulates.
      * @param numInputs An {@code int}, the maximum number of input items that are passed as a batch
      *        to {@link #makeJob(List) makeJob}.
-     * @param throttleFactor The throttle factor; it must be between 0 and 1. When 0, a batch is 
-     *        taken from {@code in} and passed to {@link #makeJob(List) makeJob} whenever
-     *        there are sufficient items. When 1, it is also required that at least one worker 
-     *        is available. Intermediate values yield different degrees of throttling. 
      * @param timeoutDuration The maximum duration of the time this {@link PerformerPausableFixedThreadPoolExecutor} will wait for 
      *        the arrival of an input item.  
      * @param timeoutTimeUnit The {@link TimeUnit} for {@code timeoutDuration}. 
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public PerformerPausableFixedThreadPoolExecutor(String name, InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
-    	super(name, in, out, numInputs, throttleFactor, timeoutDuration, timeoutTimeUnit);
+    public PerformerPausableFixedThreadPoolExecutor(String name, InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    	super(name, in, out, numInputs, timeoutDuration, timeoutTimeUnit);
         this.threadPool = new PausableFixedThreadPoolExecutor(name, numOfThreads);
     }
     
@@ -62,18 +58,29 @@ public abstract class PerformerPausableFixedThreadPoolExecutor<I,O> extends Perf
     	return this.threadPool.isIdle();
     }
     
+	@Override
+	protected boolean availableWorkers(int numTargets) {
+    	return this.threadPool.getCorePoolSize() - this.threadPool.getActiveCount() > 0;
+	}
+
+    /**
+     * Makes a {@link Runnable} job to be executed by a thread encapsulated by 
+     * this performer.
+     * 
+     * @param items a {@link List}{@code <I>}, a batch of input items whose minimum
+     *        size is 1 and whose maximum size is the {@code numInputs} parameter
+     *        passed upon construction (with the possible exception of the seed items, 
+     *        that are not split according to {@code numInputs} but are always passed 
+     *        as a unique batch).
+     * @return a {@link Runnable} that elaborates {@code items}, possibly putting
+     *         some output items in the output buffer.
+     */
+    protected abstract Runnable makeJob(List<I> items);
+
     @Override
-    protected final int availableWorkers() {
-    	return this.threadPool.getCorePoolSize() - this.threadPool.getActiveCount() - this.getPreallocatedWorkers();
-    }
+	protected void executeJob(List<I> items) {
+    	Runnable job = makeJob(items);
+    	this.threadPool.execute(job);		
+	}
     
-    @Override
-    protected final void execute(Runnable job) {
-    	this.threadPool.execute(job);
-    }
-    
-    @Override
-    protected Object[] allocateJob(List<I> items) {
-    	return null; //nothing to do, and no args to return
-    }
 }

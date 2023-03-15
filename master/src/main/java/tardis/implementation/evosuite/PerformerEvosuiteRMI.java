@@ -70,7 +70,6 @@ import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
-import tardis.framework.PerformerMultiServer;
 import tardis.implementation.common.NoJavaCompilerException;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
@@ -83,7 +82,7 @@ import tardis.implementation.jbse.JBSEResult;
  * @author Pietro Braione
  * @author Lorenzo Benatti
  */
-public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult, EvosuiteResult> implements TestListenerRemote {
+public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteResult> implements TestListenerRemote {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuiteRMI.class);
     private static final String TARDIS_RMI_IDENTIFIER = "TARDIS_RMI_IDENTIFIER";
     private static final int RMI_REGISTRY_PORT_BASE = 2000;
@@ -108,10 +107,12 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     private volatile boolean stopUntilFirstEvosuite = true;
     private List<PerformerEvosuiteListener> listeners = new ArrayList<>();
     
+    //public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numTargetsPerJobMax, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+
     public PerformerEvosuiteRMI(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, 
     RemoteException, InterruptedException {
-        super("PerformerEvosuiteRMI", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob() + o.getNumTargetsEvosuiteOverloaded(), o.getNumTargetsEvosuitePerJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
+        super("PerformerEvosuiteRMI", in, out, o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
             throw new NoJavaCompilerException();
@@ -141,7 +142,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
         startRMI();
         
         //creates the EvoSuite instances
-        createEvosuite();
+        createEvosuiteNodes();
     }
     
     public void registerListener(PerformerEvosuiteListener l) {
@@ -193,7 +194,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
 		LOGGER.info("PerformerEvosuiteRMI exported and bound to RMI registry");
 	}
 	
-	private void createEvosuite() throws ClassNotFoundException, MalformedURLException, SecurityException, InterruptedException {
+	private void createEvosuiteNodes() throws ClassNotFoundException, MalformedURLException, SecurityException, InterruptedException {
 		LOGGER.info("[begin createEvosuite]");
         final List<String> evosuiteCommand = buildEvoSuiteCommand(); 
         for (int i = 0; i < this.o.getNumOfThreadsEvosuite(); ++i) {
@@ -330,19 +331,10 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     }
 
     @Override
-    protected Object[] allocateJob(List<JBSEResult> items) {
-    	LOGGER.info("[begin allocateJob]");
+    protected void executeJob(List<JBSEResult> items) {
+    	LOGGER.info("[begin executeJob]");
     	ArrayList<Pair<JBSEResult, Integer>> compiled = generateWrappers(items);
     	String workerKey = allocateGoalsToSomeEvosuite(compiled);
-    	LOGGER.info("[end allocateJob]");
-    	return new Object[]{workerKey, compiled};
-    }
-
-    @Override
-    protected void executeJob(List<JBSEResult> items, Object... args) {
-    	LOGGER.info("[begin executeJob]");
-    	String workerKey = (String) args[0];
-    	ArrayList<Pair<JBSEResult, Integer>> compiled = (ArrayList<Pair<JBSEResult, Integer>>) args[1];
     	if (this.terminated) {
     		LOGGER.info("All Evosuite instances terminated, Evosuite job ignored");
     	} else if (workerKey != null) {
@@ -375,13 +367,18 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     }
     
     @Override
-    protected synchronized int availableWorkers() {
-    	int retVal = 0;
+    protected synchronized boolean availableWorkers(int numTargets) {
+    	int availableCapacity = 0;
     	for (Map.Entry<String, Integer> e : this.evosuiteCapacityCounter.entrySet()) {
-    		retVal += e.getValue();
+    		availableCapacity += e.getValue();
     	}
-    	return retVal - getPreallocatedWorkers();
+    	return availableCapacity >= numTargets * this.o.getThrottleFactorEvosuite();
     }
+    
+    @Override
+    protected final boolean areWorkersIdle() {
+    	return this.terminated;
+    }    
 
     @Override
 	public synchronized void evosuiteServerReady(String evosuiteServerRmiIdentifier) throws RemoteException {
@@ -500,10 +497,9 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
 	public synchronized void evosuiteServerShutdown(String evosuiteServerRmiIdentifier) throws RemoteException {
 		LOGGER.info("Evosuite server %s communicated shutdown", evosuiteServerRmiIdentifier);
 		this.evosuiteNodes.remove(evosuiteServerRmiIdentifier);
-		this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, Integer.valueOf(this.o.getNumTargetsEvosuitePerJob() + this.o.getNumTargetsEvosuiteOverloaded()));
+		this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, Integer.valueOf(this.o.getNumTargetsEvosuitePerJob() + this.o.getNumTargetsEvosuiteOverloaded()));//TODO: Check with Pietro
 		if (this.evosuiteNodes.isEmpty()) {
 			LOGGER.info("All Evosuite servers down");
-			releaseAllPreallocatedWorkers();
 			this.terminated = true;
 			this.notifyAllEvosuiteTerminated();
 		}

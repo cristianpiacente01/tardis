@@ -85,7 +85,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
-    	super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
+    	super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
     	this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
@@ -125,23 +125,19 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     }
 
     @Override
-    protected void executeJob(List<JBSEResult> items, Object... args) {
-    	//assert(args == null); //args is always null and not even used...
+    protected Runnable makeJob(List<JBSEResult> items) {
+        while (this.stopForSeeding) ; //ugly spinlocking
         final int testCountInitial = this.testCount;
         final boolean isSeed = items.stream().map(JBSEResult::isSeed).reduce(true, (a, b) -> a && b); 
         if (isSeed) {
             this.stopForSeeding = true;
-        	generateTestsAndScheduleJBSESeed(testCountInitial, items);
         } else {
             this.testCount += items.size();
-            generateTestsAndScheduleJBSE(testCountInitial, items);
         }
-    }
-
-    @Override
-    protected Runnable makeJob(List<JBSEResult> items) {
-    	while (this.stopForSeeding) ; //ugly spinlocking
-    	return super.makeJob(items);
+        final Runnable job = (isSeed ? 
+                              () -> generateTestsAndScheduleJBSESeed(testCountInitial, items) :
+                              () -> generateTestsAndScheduleJBSE(testCountInitial, items));
+        return job;
     }
 
     /**

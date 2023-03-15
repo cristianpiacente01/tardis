@@ -3,7 +3,6 @@ package tardis.framework;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -37,18 +36,7 @@ public abstract class Performer<I,O> {
      * to {@link #makeJob(List) makeJob}.
      */
     private final int numTargetsPerJobMax;
-    
-    /**
-     * The throttle factor; it must be between 0 and 1.
-     * When 0, a batch is taken from {@link #in} and
-     * passed to {@link #makeJob(List) makeJob} whenever
-     * there are sufficient items. When 1, it is also 
-     * required that at least {@link #numTargetsPerJobMax} workers
-     * are available. Intermediate values yield different 
-     * degrees of throttling. 
-     */
-    private final float throttleFactor;
-    
+        
     /**
      * The maximum duration of the time this {@link Performer} 
      * will wait for the arrival of an input item. 
@@ -102,8 +90,6 @@ public abstract class Performer<I,O> {
      */
     private ArrayList<I> seed;
     
-    private final AtomicInteger preallocatedWorkers = new AtomicInteger(0);
-
     /**
      * Constructor.
      * 
@@ -111,18 +97,14 @@ public abstract class Performer<I,O> {
      * @param in The {@link InputBuffer} from which this {@link Performer} will read the input items. 
      * @param out The {@link OutputBuffer} where this {@link Performer} will put the output items.
      * @param numTargetsPerJobMax An {@code int}, the maximum number of targets that are passed as a batch
-     *        to {@link #makeJob(List) makeJob}.
-     * @param throttleFactor The throttle factor; it must be between 0 and 1. When 0, a batch is 
-     *        taken from {@code in} and passed to {@link #makeJob(List) makeJob} whenever
-     *        there are sufficient items. When 1, it is also required that at least one worker 
-     *        is available. Intermediate values yield different degrees of throttling. 
+     *        to {@link #executeJob(List) executeJob}.
      * @param timeoutDuration The maximum duration of the time this {@link Performer} will wait for 
      *        the arrival of an input item.  
      * @param timeoutTimeUnit The {@link TimeUnit} for {@code timeoutDuration}. 
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numTargetsPerJobMax, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numTargetsPerJobMax, long timeoutDuration, TimeUnit timeoutTimeUnit) {
         if (in == null || out == null || timeoutTimeUnit == null) {
             throw new NullPointerException("Invalid null parameter in performer constructor.");
         }
@@ -132,7 +114,6 @@ public abstract class Performer<I,O> {
         this.in = in;
         this.out = out;
         this.numTargetsPerJobMax = numTargetsPerJobMax;
-        this.throttleFactor = throttleFactor;
         this.timeoutDuration = timeoutDuration;
         this.timeoutTimeUnit = timeoutTimeUnit;
         this.mainThread = new Thread(() -> {
@@ -158,35 +139,7 @@ public abstract class Performer<I,O> {
         this.seed = null;
     }
 
-    /**
-     * Makes a {@link Runnable} job to be executed by a thread encapsulated by 
-     * this performer.
-     * 
-     * @param items a {@link List}{@code <I>}, a batch of input items whose minimum
-     *        size is 1 and whose maximum size is the {@code numInputs} parameter
-     *        passed upon construction (with the possible exception of the seed items, 
-     *        that are not split according to {@code numInputs} but are always passed 
-     *        as a unique batch).
-     * @return a {@link Runnable} that elaborates {@code items}, possibly putting
-     *         some output items in the output buffer.
-     */
-    protected Runnable makeJob(List<I> items) {
-		//reserves items.size workers
-		this.preallocatedWorkers.addAndGet(items.size());
-
-        final Runnable job = () -> {
-        	//release the reserved workers, since they are now executing
-        	Object[] args = allocateJob(items);
-        	this.preallocatedWorkers.addAndGet(-1 * items.size());
-        	executeJob(items, args);
-        };
-        return job;
-    }
-    
-   protected abstract Object[] allocateJob(List<I> items);
    
-   protected abstract void executeJob(List<I> items, Object... args);
-
     /**
      * Gets the {@link OutputBuffer} of this {@link Performer}. Meant
      * to be used in the subclasses to implement {@link #makeJob(List)}.
@@ -338,28 +291,23 @@ public abstract class Performer<I,O> {
     protected abstract boolean areWorkersIdle();
     
     /**
-     * Returns the number of available (idle) workers.
+     * Returns whether there are enough available (idle) workers to execute numTargets targets as next job.
      * 
-     * @return an {@code int}.
+     * @return an {@code boolean}.
      */
-    protected abstract int availableWorkers();
+    protected abstract boolean availableWorkers(int numTargets);
     
-    protected int getPreallocatedWorkers() {
-    	return this.preallocatedWorkers.get();
-    }
-    
-    protected void releaseAllPreallocatedWorkers() {
-    	this.preallocatedWorkers.set(0);
-    }
-        
     /**
-     * Submits a job to a worker. The method <emph>must</emph>
-     * be nonblocking.
+     * Executes a batch of input items in a thread encapsulated by 
+     * this performer.
      * 
-     * @param job a {@link Runnable}, the job to be submitted
-     *        to the worker.
+     * @param items a {@link List}{@code <I>}, a batch of input items whose minimum
+     *        size is 1 and whose maximum size is the {@code numInputs} parameter
+     *        passed upon construction (with the possible exception of the seed items, 
+     *        that are not split according to {@code numInputs} but are always passed 
+     *        as a unique batch).
      */
-    protected abstract void execute(Runnable job);
+   protected abstract void executeJob(List<I> items);
 
     /**
      * To be invoked by the main thread. Submits the seed to 
@@ -369,8 +317,7 @@ public abstract class Performer<I,O> {
         if (this.seed == null) {
             return;
         }
-        final Runnable job = makeJob(this.seed);
-        execute(job);
+        executeJob(this.seed);
     }
 
     /**
@@ -406,7 +353,7 @@ public abstract class Performer<I,O> {
      */
     private void waitInputAndSubmitJob() throws InterruptedException {
         //throttles
-        if (availableWorkers() < this.numTargetsPerJobMax * this.throttleFactor) {
+        if (!availableWorkers(this.numTargetsPerJobMax)) {
             return;
         }
 
@@ -415,8 +362,7 @@ public abstract class Performer<I,O> {
         
         //submits job
         if (items != null && items.size() > 0) {
-            final Runnable job = makeJob(items);
-            execute(job);
+            executeJob(items);
         }
     }
 }
