@@ -593,19 +593,17 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final boolean feasible = result.getLabel();
         final int voting = result.getVoting();
         
-        final int[] rankingArray = queueRanking();
-        
         final int indexInfeasibility;
         if (unknown) {
         	//max priority
         	LOGGER.info("[updateIndexInfeasibility] The result is unknown, so the queue is the first one, with the max priority");
-        	indexInfeasibility = rankingArray[0];
+        	indexInfeasibility = this.queueRanking[0];
         } else {
         	if (voting == JBSEResultInputOutputBuffer.K) {
         		//last queue (min priority) if infeasible, first queue (max priority) if feasible
         		LOGGER.info("[updateIndexInfeasibility] voting equals K, so the queue is the %s one, with the %s priority", 
         				!feasible ? "last" : "first", !feasible ? "min" : "max");
-        		indexInfeasibility = !feasible ? rankingArray[rankingArray.length - 1] : rankingArray[0];
+        		indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 1] : this.queueRanking[0];
         	} else {
         		//voting < K
         		
@@ -616,29 +614,29 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         		//if infeasible mid .. the one before last, 
         		//if feasible second .. mid
         			
-        		final int numberOfPossibleQueues = (rankingArray.length / 2) - 1;
-        		//how many queues are being considered
-        		//works for both feasible and infeasible 
-        		//and for both even and odd rankingArray.length, considering the floor
+        		final int numberOfPossibleQueues = (this.queueRanking.length / 2) - 1;
+        		//how many queues are being considered,
+        		//it works for both feasible and infeasible 
+        		//and for both even and odd queueRanking.length, considering the floor
+        		
+        		final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - 1 - JBSEResultInputOutputBuffer.K / 2;
+        		//how many possible voting values there are,
+        		//which go from floor(K/2)+1 to K-1,
+        		//which would be K/2 - 1 values if K is even,
+        		//but not if it's odd, 
+        		//so to make it work in general it's K-1 - (floor(K/2)+1) + 1
+        		//= K-1 - floor(K/2)-1+1 = K-1 - floor(K/2)
+    			
+        		//e.g. if K = 10 then we can have {6,7,8,9} so 4
+        		//e.g. if K = 11 then we can have {6,7,8,9,10} so 5
         			
-        		if (numberOfPossibleQueues == 1) {
+        		if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) { //numberOfPossibleQueues == 1 || K == 4
         			//just use the queue
-        			LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue");
-        			indexInfeasibility = !feasible ? rankingArray[rankingArray.length - 2]
-        					: rankingArray[1];
+        			LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value");
+        			indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 2]
+        					: this.queueRanking[1];
         		} else {
         			LOGGER.info("[updateIndexInfeasibility] There are %d possible queues", numberOfPossibleQueues);
-        			
-        			final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - 1 - JBSEResultInputOutputBuffer.K / 2;
-            		//how many possible voting values there are,
-            		//which values go from floor(K/2)+1 to K-1,
-            		//which would be K/2 - 1 values if K is even,
-            		//but not if it's odd, 
-            		//so to make it work in general it's K-1 - (floor(K/2)+1) + 1
-            		//= K-1 - floor(K/2)-1+1 = K-1 - floor(K/2)
-        			
-            		//e.g. if K = 10 then we can have {6,7,8,9} so 4
-            		//e.g. if K = 11 then we can have {6,7,8,9,10} so 5
         			
         			LOGGER.info("[updateIndexInfeasibility] Number of possible values for voting: %d", numberOfPossibleVoting);
         			
@@ -647,40 +645,32 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         			//if feasible, how many positions to go forward (from the first position)
         			final int newValue;
             			
-            		if (numberOfPossibleVoting > numberOfPossibleQueues) {
-            			LOGGER.info("[updateIndexInfeasibility] Applying a linear transform, since the number of possible voting values is greater than the queues one");
-            			//linear transform, rounding to the closer int
+            		LOGGER.info("[updateIndexInfeasibility] Applying a linear transform");
+            		//linear transform, rounding to the closest int
             				
-            			final int oldValue = voting;
-            			final int oldBottom = JBSEResultInputOutputBuffer.K / 2 + 1; //floor(K/2)+1
-            			final int oldTop = JBSEResultInputOutputBuffer.K - 1; //K-1
-            			//voting in [floor(K/2)+1, K-1]
+            		final int oldValue = voting;
+            		final int oldBottom = JBSEResultInputOutputBuffer.K / 2 + 1; //floor(K/2)+1
+            		final int oldTop = JBSEResultInputOutputBuffer.K - 1; //K-1
+            		//voting in [floor(K/2)+1, K-1]
             				
-            			final int newBottom = 1;
-            			final int newTop = numberOfPossibleQueues;
-            			//the result is in [1, numberOfPossibleQueues]
+            		final int newBottom = 1;
+            		final int newTop = numberOfPossibleQueues;
+            		//the result is in [1, numberOfPossibleQueues]
             				
-            			//there can't be a division by zero because it only happens
-            			//when K = 4 but when K = 4 we have numberOfPossibleQueues = 1
-            			//so this statement isn't reached
+            		//there can't be a division by zero because it only happens
+            		//when K = 4 but when K = 4 we have numberOfPossibleVoting = 1
+            		//so this statement isn't reached
             				
-            			//I multiply the denominator by 1.0d to use floating point values and then round the result
-            			newValue = (int) Math.round((oldValue - oldBottom) / (1.0d * oldTop - oldBottom) * (newTop - newBottom) + newBottom);
+            		//I multiply the denominator by 1.0d to use floating point values and then round the result
+            		newValue = (int) Math.round((oldValue - oldBottom) / (1.0d * oldTop - oldBottom) * (newTop - newBottom) + newBottom);
             			
-            			LOGGER.info("[updateIndexInfeasibility] Transformed voting in [%d, %d] to a new value in [1, %d]", oldBottom, oldTop, newTop);
-            		} else {
-            			//no linear transform is needed
-            			
-            			//instead, voting % (oldBottom - 1) to have values starting from 1 and not 0
-            			newValue = voting % (JBSEResultInputOutputBuffer.K / 2);
-            			
-            			LOGGER.info("[updateIndexInfeasibility] No linear transform is needed, but applying new value = voting mod %d = %d", 
-            					JBSEResultInputOutputBuffer.K / 2, newValue);
-            		}
+            		LOGGER.info("[updateIndexInfeasibility] Transformed voting = %d in [%d, %d] to a new value = %d in [1, %d]",
+            				voting, oldBottom, oldTop, newValue, newTop);
+            		
             		LOGGER.info("[updateIndexInfeasibility] Going %s from the %s position %d times", 
             				!feasible ? "back" : "forward", !feasible ? "last" : "first", newValue);
-            		indexInfeasibility = !feasible ? rankingArray[rankingArray.length - 1 - newValue]
-            				: rankingArray[newValue]; //if feasible, 0 + newValue is used
+            		indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 1 - newValue]
+            				: this.queueRanking[newValue]; //if feasible, 0 + newValue is used
         		}
         	}
         }
@@ -688,7 +678,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         //TODO remove this log
         LOGGER.info("Got index infeasibility = %d", indexInfeasibility);
         
-        if (indexInfeasibility != rankingArray[0]) { //priority != max
+        if (indexInfeasibility != this.queueRanking[0]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
         	if (oldIndexInfeasibility != indexInfeasibility) { //could be the same because this method is invoked in the class PerformerJBSE too
 	        	LOGGER.info("[updateIndexInfeasibility, NOT MAX, unknown = %b, voting = %d, feasible = %b] Changed the infeasibility index from %d to %d, path = %s", 

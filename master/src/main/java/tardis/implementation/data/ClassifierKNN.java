@@ -119,12 +119,15 @@ final class ClassifierKNN {
         	//too many uncertains, or tie between 0 and 1 classification
         	LOGGER.info("[classify] The query was classified as UNKNOWN because there are too many uncertains or there's a tie between false and true");
         	output = ClassificationResult.unknown();
-        } else if (countClassifyTrue > countClassifyFalse) {
+        } else if (countClassifyTrue > countClassifyFalse && (countUncertain + countClassifyFalse < countClassifyTrue)) {
         	LOGGER.info("[classify] The query was classified as FEASIBLE");
         	output = ClassificationResult.of(true, countClassifyTrue);
-        } else { //countClassifyFalse > countClassifyTrue
+        } else if (countClassifyFalse > countClassifyTrue && (countUncertain + countClassifyTrue < countClassifyFalse)) {
         	LOGGER.info("[classify] The query was classified as INFEASIBLE");
         	output = ClassificationResult.of(false, countClassifyFalse);
+        } else { //e.g. K = 10 but countUncertain = 2 and countClassifyFalse = 3 so countClassifyTrue = 5 but it would make sense if this was > 5
+        	LOGGER.info("[classify] The query was classified as UNKNOWN because the uncertains + the lowest counter isn't less than the highest one");
+        	output = ClassificationResult.unknown();
         }
         
         return output;
