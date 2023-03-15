@@ -16,7 +16,7 @@ import tardis.implementation.common.Util;
  * infeasibility core of the item to be classified 
  * with the infeasibility core of all the items in the training set:
  * if there's no relation then the Jaccard distance between the contexts is used 
- * to perform the classification.
+ * to perform the classification based on a score.
  * 
  * @author Matteo Modonato
  * @author Pietro Braione
@@ -75,12 +75,13 @@ final class ClassifierKNN {
         	final BloomFilter first = item.getLabel() ? itemBloomFilter : query;
         	final BloomFilter second = item.getLabel() ? query : itemBloomFilter; 
         	
-        	//if first's core contains second's specific/general core we have a relation
+        	//if first's core contains second's core we have a relation
+        	//if there's no relation between the specific cores then the general cores are checked too
         	
-        	if (first.containsOtherCore(second, true)) { //specific (concrete) core
+        	if (first.containsOtherCore(second, true)) { //specific (concrete) cores
         		score = 2.0d + ctxSimilarity;
         	} 
-        	else if (first.containsOtherCore(second, false)) { //general (abstract) core
+        	else if (first.containsOtherCore(second, false)) { //general (abstract) cores
         		score = 1.0d + ctxSimilarity;
         	}
         	else {
@@ -97,7 +98,7 @@ final class ClassifierKNN {
         int countUncertain = 0;
         int countClassifyFalse = 0;
         int countClassifyTrue = 0;
-        for (int l = 0; l < this.k; ++l){
+        for (int l = 0; l < this.k; ++l) {
             final boolean label = neighborRanking.get(l).label;
             final double score = neighborRanking.get(l).score;
             if (Util.doubleEquals(score, 0.0d)) {

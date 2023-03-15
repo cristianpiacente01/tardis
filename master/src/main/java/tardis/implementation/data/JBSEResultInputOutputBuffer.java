@@ -611,7 +611,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         		
         		LOGGER.info("[updateIndexInfeasibility] voting < K");
         		
-        		//(this only happens when K > 1)
+        		//(this only happens when K > 2)
         			
         		//if infeasible mid .. the one before last, 
         		//if feasible second .. mid
