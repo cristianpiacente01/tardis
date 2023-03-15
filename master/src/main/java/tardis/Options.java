@@ -109,11 +109,13 @@ public final class Options implements Cloneable {
             usage = "The number of threads in the EvoSuite thread pool")
     private int numOfThreadsEvosuite = 1;
 
+    //TODO: Remove throttling?
     @Option(name = "-throttle_factor_jbse",
             usage = "The throttle factor for the JBSE thread pool",
             handler = PercentageOptionHandler.class)
-    private float throttleFactorJBSE = 1.0f;
+    private float throttleFactorJBSE = 1.0f; 
 
+    //TODO: Remove throttling?
     @Option(name = "-throttle_factor_evosuite",
             usage = "The throttle factor for the EvoSuite thread pool",
             handler = PercentageOptionHandler.class)

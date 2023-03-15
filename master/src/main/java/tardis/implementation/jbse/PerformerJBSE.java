@@ -78,16 +78,19 @@ implements PerformerEvosuiteListener {
     private boolean testGeneratorTerminated = false;
     
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
-        super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), NUM_INPUTS_PER_JOB, o.getThrottleFactorJBSE(), o.getTimeoutJBSEJobCreationDuration() / NUM_INPUTS_PER_JOB, o.getTimeoutJBSEJobCreationUnit());
+        super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), NUM_INPUTS_PER_JOB, o.getTimeoutJBSEJobCreationDuration() / NUM_INPUTS_PER_JOB, o.getTimeoutJBSEJobCreationUnit());
         this.o = o.clone();
         this.out = out;
         this.treePath = treePath;
     }
 
     @Override
-    protected void executeJob(List<EvosuiteResult> items, Object... args) {
-    	final EvosuiteResult item = items.get(0);
-        explore(item, item.getStartDepth());
+    protected Runnable makeJob(List<EvosuiteResult> items) {
+        final Runnable job = () -> {
+        	final EvosuiteResult item = items.get(0);
+            explore(item, item.getStartDepth());
+        };
+        return job;
     }
 
     /**
