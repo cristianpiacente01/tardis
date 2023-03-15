@@ -13,11 +13,10 @@ import tardis.implementation.common.Util;
 
 /**
  * Class that predicts the possible label of a given path condition by comparing the
- * infeasibility core (specific and abstract if needed) of the item to be classified 
+ * infeasibility core of the item to be classified 
  * with the infeasibility core of all the items in the training set:
  * if there's no relation then the Jaccard distance between the contexts is used 
- * (via a Bloom filter structure) to perform the classification 
- * and calculate the infeasibility index.
+ * to perform the classification.
  * 
  * @author Matteo Modonato
  * @author Pietro Braione
@@ -26,7 +25,7 @@ import tardis.implementation.common.Util;
 final class ClassifierKNN {
 	private static final Logger LOGGER = LogManager.getFormatterLogger(ClassifierKNN.class);
 	
-    private final int k; //currently not used
+    private final int k;
     private final HashSet<TrainingItem> trainingSet = new HashSet<>();
     
     public ClassifierKNN(int k) {
@@ -45,96 +44,96 @@ final class ClassifierKNN {
     			
     	if (this.trainingSet.size() < k) {
     		LOGGER.info("[classify] The query was classified as UNKNOWN because trainingSet.size() is too small");
-    		return ClassificationResult.unknown(); //too small
+    		final ClassificationResult trainingSetTooSmallOutput = ClassificationResult.unknown();
+    		return trainingSetTooSmallOutput;
     	}
     	
-    	//for every item in the training set, calculate the neighbor's ranking (floating point value) and store it and the label
-    	final ArrayList<Neighbor> neighbors = new ArrayList<>();
-    	
-    	int numberOfInfeasible = 0; //it counts how many items in the training set are infeasible
-    	//used later for finding (if needed) the top neighbor feasible easily
+    	//for every item in the training set, calculate the neighbor's score and store it with the label
+    	final ArrayList<Neighbor> neighborRanking = new ArrayList<>();
     	
         for (TrainingItem item : this.trainingSet) {
-        	final BloomFilter itemBloomFilter = item.getBloomFilter(); //item's BloomFilter structure, used to check for a relation
+        	final BloomFilter itemBloomFilter = item.getBloomFilter();
         	
-        	final double ranking; //can be 0.0 or 1.0<=ranking<2.0 or 2.0<=ranking<3.0
+        	final double score; 
         	
-        	final double averageDistance = query.jaccardDistance(itemBloomFilter); //context distance
+        	final double ctxSimilarity = query.ctxJaccardSimilarity(itemBloomFilter); //context Jaccard similarity coefficient
         	
-        	//if the item is feasible, we have a relation if
-    		//the item contains the query, otherwise if the query contains the item
-    		
-    		//e.g. we have A && B && C && D feasible in the training set
-    		//and our query is A && B && C
-    		
-    		//e.g. we have A && B && C infeasible in the training set
-    		//and our query is A && B && C && D
+        	/*
+        	 * if the item is feasible, we have a relation if
+        	 * the item contains the query, otherwise if the query contains the item
+        	 * 
+        	 * e.g. we have A && B && C && D feasible in the training set
+        	 * and our query is A && B && C
+        	 * 
+        	 * e.g. we have A && B && C infeasible in the training set
+        	 * and our query is A && B && C && D
+        	*/
         	
         	
-        	//we'll check if first contains second (considering their cores)
+        	//we'll check if first contains second
         	
         	final BloomFilter first = item.getLabel() ? itemBloomFilter : query;
         	final BloomFilter second = item.getLabel() ? query : itemBloomFilter; 
         	
-        	
-        	//if first's core contains second's core we have a relation
+        	//if first's core contains second's specific/general core we have a relation
         	
         	if (first.containsOtherCore(second, true)) { //specific (concrete) core
-        		ranking = 2.0d + (1.0d - averageDistance); //2 + similarity coefficient
+        		score = 2.0d + ctxSimilarity;
         	} 
         	else if (first.containsOtherCore(second, false)) { //general (abstract) core
-        		ranking = 1.0d + (1.0d - averageDistance); //1 + similarity coefficient
+        		score = 1.0d + ctxSimilarity;
         	}
         	else {
-        		ranking = 0.0d;
+        		score = 0.0d;
         	}
         	
-        	//update numberOfInfeasible
-        	if (!item.getLabel()) {
-        		++numberOfInfeasible;
-        	}
-        	
-        	neighbors.add(new Neighbor(ranking, item.getLabel()));
+        	neighborRanking.add(new Neighbor(score, item.getLabel()));
         }
         
-        //infeasible first, then higher ranking first (descending order)
-        Collections.sort(neighbors, new NeighborComparator());
+        Collections.sort(neighborRanking, new NeighborComparator());
         
-        Neighbor topNeighborInfeasible = neighbors.get(0);
-        
-        //if the label is true it means there's no infeasible neighbor
-        //if this is the case or the top infeasible's ranking is 0.0 (there's no core relation) then return UNKNOWN
-        if (topNeighborInfeasible.label || Util.doubleEquals(topNeighborInfeasible.ranking, 0.0d)) { 
-        	//there is no top neighbor infeasible or ranking equals 0
-        	LOGGER.info("[classify] The query was classified as UNKNOWN because there's no topNeighborInfeasible or its ranking is 0.0");
-        	return ClassificationResult.unknown();
+        //analyzes the top k elements and counts how many are
+        //uncertain, and how many classify with each label
+        int countUncertain = 0;
+        int countClassifyFalse = 0;
+        int countClassifyTrue = 0;
+        for (int l = 0; l < this.k; ++l){
+            final boolean label = neighborRanking.get(l).label;
+            final double score = neighborRanking.get(l).score;
+            if (Util.doubleEquals(score, 0.0d)) {
+                ++countUncertain;
+            } else if (label) { 
+                ++countClassifyTrue;
+            } else { //!label
+                ++countClassifyFalse;
+            }
         }
         
-        assert(numberOfInfeasible < neighbors.size());; //it should always exist
+        LOGGER.info("[classify] countUncertain = %d, countClassifyFalse = %d, countClassifyTrue = %d", countUncertain, countClassifyFalse, countClassifyTrue);
         
-        Neighbor topNeighborFeasible = neighbors.get(numberOfInfeasible);
-        //e.g. if we have 3 items and 1 is infeasible then the top neighbor feasible is the second one (index = 1)
+        //builds the output
+        final ClassificationResult output;
         
-    	//let's compare the top neighbor infeasible and the top neighbor feasible, both exist
-        
-        LOGGER.info("[classify] Found both topNeighborInfeasible and topNeighborFeasible");
-        
-        if (topNeighborInfeasible.ranking > topNeighborFeasible.ranking) {
-        	LOGGER.info("[classify] topNeighborInfeasible's ranking is greater, the query was classified as INFEASIBLE with ranking = %d", (int)topNeighborInfeasible.ranking);
-        	return ClassificationResult.of(false, (int)topNeighborInfeasible.ranking);
+        if ((countUncertain >= countClassifyFalse && countUncertain >= countClassifyTrue) || countClassifyFalse == countClassifyTrue) {
+        	//too many uncertains, or tie between 0 and 1 classification
+        	LOGGER.info("[classify] The query was classified as UNKNOWN because there are too many uncertains or there's a tie between false and true");
+        	output = ClassificationResult.unknown();
+        } else if (countClassifyTrue > countClassifyFalse) {
+        	LOGGER.info("[classify] The query was classified as FEASIBLE");
+        	output = ClassificationResult.of(true, countClassifyTrue);
+        } else { //countClassifyFalse > countClassifyTrue
+        	LOGGER.info("[classify] The query was classified as INFEASIBLE");
+        	output = ClassificationResult.of(false, countClassifyFalse);
         }
-        else {
-        	LOGGER.info("[classify] topNeighborFeasible's ranking is greater (FEASIBLE) or equal (UNKNOWN), the query was classified as FEASIBLE (ranking = 3, the same as UNKNOWN)");
-        	return ClassificationResult.of(true, 3); //feasible (or unknown)
-        }
+        
+        return output;
     }
 
     private static class Neighbor {
-    	private final double ranking; //the distance isn't needed because it's 1 - the decimal part
-    	private final boolean label; //true iff feasible
-        
-    	private Neighbor(double ranking, boolean label) {
-    		this.ranking = ranking;
+    	private final double score;
+    	private final boolean label;
+    	private Neighbor(double score, boolean label) {
+    		this.score = score;
     		this.label = label;
     	}
     }
@@ -142,66 +141,52 @@ final class ClassifierKNN {
     private static class NeighborComparator implements Comparator<Neighbor> {
         @Override
         public int compare(Neighbor a, Neighbor b) {
-        	//let's put the neighbors labeled as infeasible first, so it's easier for the classify method
         	
-        	if (a.label != b.label) {
-        		return !a.label ? -1 : 1;
-        		//if a.label is false then b.label must be true
-        		//if a.label is true then b.label must be false
-        	}
+        	boolean sameScore = Util.doubleEquals(a.score, b.score);
         	
-        	
-        	//here we have the same label, let's check the ranking
-        	
-        	boolean sameDistance = Util.doubleEquals(a.ranking, b.ranking);
-        	
-        	//descending order to compare the ranking, the higher the better
-        	return sameDistance ? 0 : (a.ranking > b.ranking ? -1 : 1); 
+        	//descending order
+        	return sameScore ? 0 : (a.score > b.score ? -1 : 1); 
         }
     }
     
     static class ClassificationResult {
         private static final ClassificationResult UNKNOWN = new ClassificationResult();
-        //in this implementation, unknown and feasible (ranking = 3) are the same
         
-        private final boolean unknown; //true iff unknown but unknown is true iff ranking = 3...
-        //in the future we could reduce the number of attributes
-        
-        private final boolean label; //true iff feasible
-        //private final int voting; //no voting for now
-        private final int ranking; //1 or 2 or 3 (never 0 because unknown is 3 now)
-        
-        //private final double averageDistance; //the average distance wasn't even used in the old implementation...
+        private final boolean unknown;
+        private final boolean label;
+        private final int voting;
+        //private final double averageDistance; //it wasn't even used in the old implementation...
         
         static ClassificationResult unknown() {
             return UNKNOWN;
         }
         
-        static ClassificationResult of(boolean label, int ranking) {
-        	//assert(ranking != 0);
-            return new ClassificationResult(false, label, ranking);
+        static ClassificationResult of(boolean label, int voting) {
+            return new ClassificationResult(label, voting);
         }
         
         private ClassificationResult() {
-        	this(true, true, 3); //unknown is considered as feasible now
+        	this.unknown = true;
+        	this.label = true;
+        	this.voting = 0;
         }
         
-        private ClassificationResult(boolean unknown, boolean label, int ranking) {
-            this.unknown = unknown;
+        private ClassificationResult(boolean label, int voting) {
+            this.unknown = false;
             this.label = label;
-            this.ranking = ranking;
+            this.voting = voting;
         }
         
         public boolean isUnknown() {
-            return this.unknown; //as said before, we could just return this.ranking == 3;
+            return this.unknown;
         }
         
         public boolean getLabel() {
             return this.label;
         }
         
-        public int getRanking() {
-            return this.ranking;
+        public int getVoting() {
+            return this.voting;
         }
     }
 }
