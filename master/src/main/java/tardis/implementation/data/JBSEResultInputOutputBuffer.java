@@ -630,7 +630,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         		//e.g. if K = 10 then we can have {6,7,8,9} so 4
         		//e.g. if K = 11 then we can have {6,7,8,9,10} so 5
         			
-        		if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) { //numberOfPossibleQueues == 1 || K == 4
+        		if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) {
         			//just use the queue
         			LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value");
         			indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 2]
@@ -658,7 +658,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             		//the result is in [1, numberOfPossibleQueues]
             				
             		//there can't be a division by zero because it only happens
-            		//when K = 4 but when K = 4 we have numberOfPossibleVoting = 1
+            		//when K = 3 or 4 but that means numberOfPossibleVoting = 1
             		//so this statement isn't reached
             				
             		//I multiply the denominator by 1.0d to use floating point values and then round the result
