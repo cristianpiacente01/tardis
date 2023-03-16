@@ -141,28 +141,25 @@ final class BloomFilter {
 
 	@Override
 	public boolean equals(Object obj) {
-		if (this == obj)
+		if (this == obj) {
 			return true;
-		if (obj == null)
+		}
+		if (obj == null) {
 			return false;
-		if (getClass() != obj.getClass())
+		}
+		if (getClass() != obj.getClass()) {
 			return false;
-		BloomFilter other = (BloomFilter) obj;
-		if (context == null) {
-			if (other.context != null)
-				return false;
-		} else if (!context.equals(other.context))
+		}
+		final BloomFilter other = (BloomFilter) obj;
+		if (!context.equals(other.context)) {
 			return false;
-		if (generalInfeasibilityCore == null) {
-			if (other.generalInfeasibilityCore != null)
-				return false;
-		} else if (!generalInfeasibilityCore.equals(other.generalInfeasibilityCore))
+		}
+		if (!generalInfeasibilityCore.equals(other.generalInfeasibilityCore)) {
 			return false;
-		if (specificInfeasibilityCore == null) {
-			if (other.specificInfeasibilityCore != null)
-				return false;
-		} else if (!specificInfeasibilityCore.equals(other.specificInfeasibilityCore))
+		}
+		if (!specificInfeasibilityCore.equals(other.specificInfeasibilityCore)) {
 			return false;
+		}
 		return true;
 	}
 
