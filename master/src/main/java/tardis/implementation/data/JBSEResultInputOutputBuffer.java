@@ -613,11 +613,18 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         			
         		//if infeasible mid .. the one before last, 
         		//if feasible second .. mid
+        		
+        		//if the queueRanking length is odd and the label is feasible then use the mid queue too,
+        		//so for example if we have {4,3,2,1,0} the possible queues are {3,2} for feasible classifications and {1} for infeasible ones, 
+        		//to give more priority to feasible classifications
         			
-        		final int numberOfPossibleQueues = (this.queueRanking.length / 2) - 1;
-        		//how many queues are being considered,
-        		//it works for both feasible and infeasible 
-        		//and for both even and odd queueRanking.length, considering the floor
+        		final int numberOfPossibleQueues;
+        		if (feasible && this.queueRanking.length % 2 == 1) {
+        			numberOfPossibleQueues = this.queueRanking.length / 2;
+        		} else {
+        			numberOfPossibleQueues = (this.queueRanking.length / 2) - 1;
+        		}
+        		//how many queues are being considered
         		
         		final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - 1 - JBSEResultInputOutputBuffer.K / 2;
         		//how many possible voting values there are,
