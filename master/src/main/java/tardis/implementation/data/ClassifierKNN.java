@@ -16,7 +16,7 @@ import tardis.implementation.common.Util;
  * infeasibility core of the item to be classified 
  * with the infeasibility core of all the items in the training set:
  * if there's no relation then the Jaccard distance between the contexts is used 
- * to perform the classification based on a score.
+ * to perform the classification based on a similarity score.
  * 
  * @author Matteo Modonato
  * @author Pietro Braione
@@ -48,13 +48,13 @@ final class ClassifierKNN {
     		return trainingSetTooSmallOutput;
     	}
     	
-    	//for every item in the training set, calculate the neighbor's score and store it with the label
+    	//for every item in the training set, calculate the neighbor's similarity score and store it with the label
     	final ArrayList<Neighbor> neighborRanking = new ArrayList<>();
     	
         for (TrainingItem item : this.trainingSet) {
         	final BloomFilter itemBloomFilter = item.getBloomFilter();
         	
-        	final double score; 
+        	final double similarity; 
         	
         	final double ctxSimilarity = query.ctxJaccardSimilarity(itemBloomFilter); //context Jaccard similarity coefficient
         	
@@ -79,36 +79,38 @@ final class ClassifierKNN {
         	//if there's no relation between the specific cores then the general cores are checked too
         	
         	if (first.containsOtherCore(second, true)) { //specific (concrete) cores
-        		score = 2.0d + ctxSimilarity;
+        		similarity = 2.0d + ctxSimilarity;
         	} 
         	else if (first.containsOtherCore(second, false)) { //general (abstract) cores
-        		score = 1.0d + ctxSimilarity;
+        		similarity = 1.0d + ctxSimilarity;
         	}
         	else {
-        		score = 0.0d;
+        		similarity = 0.0d;
         	}
         	
-        	neighborRanking.add(new Neighbor(score, item.getLabel()));
+        	neighborRanking.add(new Neighbor(similarity, item.getLabel()));
         }
         
         Collections.sort(neighborRanking, new NeighborComparator());
         
         //analyzes the top k elements and counts how many are
         //uncertain, and how many classify with each label
-        int countUncertain = 0;
         int countClassifyFalse = 0;
         int countClassifyTrue = 0;
         for (int l = 0; l < this.k; ++l) {
             final boolean label = neighborRanking.get(l).label;
-            final double score = neighborRanking.get(l).score;
-            if (Util.doubleEquals(score, 0.0d)) {
-                ++countUncertain;
+            final double similarity = neighborRanking.get(l).similarity;
+            if (Util.doubleEquals(similarity, 0.0d)) {
+            	//optimization, since when a 0 is found then the remaining neighbors' similarities are 0 too (because of the descending order)
+                break;
             } else if (label) { 
                 ++countClassifyTrue;
             } else { //!label
                 ++countClassifyFalse;
             }
         }
+        
+        final int countUncertain = this.k - countClassifyTrue - countClassifyFalse; //optimization, this is now a final variable
         
         LOGGER.info("[classify] countUncertain = %d, countClassifyFalse = %d, countClassifyTrue = %d", countUncertain, countClassifyFalse, countClassifyTrue);
         
@@ -134,10 +136,10 @@ final class ClassifierKNN {
     }
 
     private static class Neighbor {
-    	private final double score;
+    	private final double similarity;
     	private final boolean label;
-    	private Neighbor(double score, boolean label) {
-    		this.score = score;
+    	private Neighbor(double similarity, boolean label) {
+    		this.similarity = similarity;
     		this.label = label;
     	}
     }
@@ -146,10 +148,10 @@ final class ClassifierKNN {
         @Override
         public int compare(Neighbor a, Neighbor b) {
         	
-        	boolean sameScore = Util.doubleEquals(a.score, b.score);
+        	boolean sameScore = Util.doubleEquals(a.similarity, b.similarity);
         	
         	//descending order
-        	return sameScore ? 0 : (a.score > b.score ? -1 : 1); 
+        	return sameScore ? 0 : (a.similarity > b.similarity ? -1 : 1); 
         }
     }
     
@@ -171,8 +173,8 @@ final class ClassifierKNN {
         
         private ClassificationResult() {
         	this.unknown = true;
-        	this.label = true;
-        	this.voting = 0;
+        	this.label = false; //default value
+        	this.voting = 0; //default value
         }
         
         private ClassificationResult(boolean label, int voting) {

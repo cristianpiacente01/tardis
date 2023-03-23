@@ -593,99 +593,125 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final boolean feasible = result.getLabel();
         final int voting = result.getVoting();
         
+        final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - JBSEResultInputOutputBuffer.K / 2;
+    	//how many possible voting values there are,
+    	//which go from floor(K/2)+1 to K,
+    	//which would be K/2 values if K is even,
+    	//but not if it's odd, 
+    	//so to make it work in general it's K - (floor(K/2)+1) + 1
+    	//= K - floor(K/2)-1+1 = K - floor(K/2)
+		
+    	//e.g. if K = 10 then we can have {6,7,8,9,10} so 5
+    	//e.g. if K = 11 then we can have {6,7,8,9,10,11} so 6
+        
+        final int offset;
+        //to calculate it: the number of unused queues (feasible + infeasible)
+        
+        //# unused queues = # queues - # used queues, 
+        //so consider number of possible queues - number of possible voting values
+        	
+        final int unusedFeasibleQueues;
+        final int unusedInfeasibleQueues = (this.queueRanking.length / 2) - numberOfPossibleVoting;
+        	
+        if (this.queueRanking.length % 2 == 1) { //this is based on the calculation which can be found below
+        	unusedFeasibleQueues = ((this.queueRanking.length / 2) + 1) - numberOfPossibleVoting;
+        } else {
+        	unusedFeasibleQueues = unusedInfeasibleQueues;
+        }
+        	
+        if (unusedFeasibleQueues + unusedInfeasibleQueues > 0) {
+        	offset = unusedFeasibleQueues + unusedInfeasibleQueues;
+        	//the linear transformation (below) is not surjective
+        } else {
+        	//the linear transformation is not injective if numberOfPossibleVoting is too high, 
+        	//so the cardinality of the domain is greater than the codomain's (number of possible queues),
+        	//we don't care about this, as long as it's surjective
+        	offset = 0;
+        }
+        
+        //how many queues are never used, so skip them from the left
+        //to avoid having wrong probabilities when choosing unused queues
+        //e.g. if we have K = 1 and 4 queues then offset = 2, so the first two queues aren't used
+        
+        LOGGER.info("[updateIndexInfeasibility] Got offset = %d", offset);
+        
+        final int newQueueRankingLength = this.queueRanking.length - offset; 
+        //length of the sub-array which is actually used, which starts from queueRanking[offset] and ends like queueRanking
+        
         final int indexInfeasibility;
         if (unknown) {
         	//max priority
-        	LOGGER.info("[updateIndexInfeasibility] The result is unknown, so the queue is the first one, with the max priority");
-        	indexInfeasibility = this.queueRanking[0];
+        	LOGGER.info("[updateIndexInfeasibility] The result is unknown, so the queue is the one with max priority, at index offset = %d", offset);
+        	indexInfeasibility = this.queueRanking[offset];
         } else {
-        	if (voting == JBSEResultInputOutputBuffer.K) {
-        		//last queue (min priority) if infeasible, first queue (max priority) if feasible
-        		LOGGER.info("[updateIndexInfeasibility] voting equals K, so the queue is the %s one, with the %s priority", 
-        				!feasible ? "last" : "first", !feasible ? "min" : "max");
-        		indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 1] : this.queueRanking[0];
+        	//voting <= K
+        		
+        	//if the sub-array length is odd and the label is feasible then use the mid queue too,
+        	//so for example if we have {4,3,2,1,0} and offset = 2 the possible queues are {2,1} for feasible classifications and {0} for infeasible ones, 
+        	//to give more priority to feasible classifications
+        			
+        	final int numberOfPossibleQueues;
+        	if (feasible && newQueueRankingLength % 2 == 1) {
+        		numberOfPossibleQueues = (newQueueRankingLength / 2) + 1;
         	} else {
-        		//voting < K
-        		
-        		LOGGER.info("[updateIndexInfeasibility] voting < K");
-        		
-        		//(this only happens when K > 2)
-        			
-        		//if infeasible mid .. the one before last, 
-        		//if feasible second .. mid
-        		
-        		//if the queueRanking length is odd and the label is feasible then use the mid queue too,
-        		//so for example if we have {4,3,2,1,0} the possible queues are {3,2} for feasible classifications and {1} for infeasible ones, 
-        		//to give more priority to feasible classifications
-        			
-        		final int numberOfPossibleQueues;
-        		if (feasible && this.queueRanking.length % 2 == 1) {
-        			numberOfPossibleQueues = this.queueRanking.length / 2;
-        		} else {
-        			numberOfPossibleQueues = (this.queueRanking.length / 2) - 1;
-        		}
-        		//how many queues are being considered
-        		
-        		final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - 1 - JBSEResultInputOutputBuffer.K / 2;
-        		//how many possible voting values there are,
-        		//which go from floor(K/2)+1 to K-1,
-        		//which would be K/2 - 1 values if K is even,
-        		//but not if it's odd, 
-        		//so to make it work in general it's K-1 - (floor(K/2)+1) + 1
-        		//= K-1 - floor(K/2)-1+1 = K-1 - floor(K/2)
-    			
-        		//e.g. if K = 10 then we can have {6,7,8,9} so 4
-        		//e.g. if K = 11 then we can have {6,7,8,9,10} so 5
-        			
-        		if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) {
-        			//just use the queue
-        			LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value");
-        			indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 2]
-        					: this.queueRanking[1];
-        		} else {
-        			LOGGER.info("[updateIndexInfeasibility] There are %d possible queues", numberOfPossibleQueues);
-        			
-        			LOGGER.info("[updateIndexInfeasibility] Number of possible values for voting: %d", numberOfPossibleVoting);
-        			
-        				
-        			//if infeasible, how many positions to go back (from the last position)
-        			//if feasible, how many positions to go forward (from the first position)
-        			final int newValue;
-            			
-            		LOGGER.info("[updateIndexInfeasibility] Applying a linear transform");
-            		//linear transform, rounding to the closest int
-            				
-            		final int oldValue = voting;
-            		final int oldBottom = JBSEResultInputOutputBuffer.K / 2 + 1; //floor(K/2)+1
-            		final int oldTop = JBSEResultInputOutputBuffer.K - 1; //K-1
-            		//voting in [floor(K/2)+1, K-1]
-            				
-            		final int newBottom = 1;
-            		final int newTop = numberOfPossibleQueues;
-            		//the result is in [1, numberOfPossibleQueues]
-            				
-            		//there can't be a division by zero because it only happens
-            		//when K = 3 or 4 but that means numberOfPossibleVoting = 1
-            		//so this statement isn't reached
-            				
-            		//I multiply the denominator by 1.0d to use floating point values and then round the result
-            		newValue = (int) Math.round((oldValue - oldBottom) / (1.0d * oldTop - oldBottom) * (newTop - newBottom) + newBottom);
-            			
-            		LOGGER.info("[updateIndexInfeasibility] Transformed voting = %d in [%d, %d] to a new value = %d in [1, %d]",
-            				voting, oldBottom, oldTop, newValue, newTop);
-            		
-            		LOGGER.info("[updateIndexInfeasibility] Going %s from the %s position %d times", 
-            				!feasible ? "back" : "forward", !feasible ? "last" : "first", newValue);
-            		indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 1 - newValue]
-            				: this.queueRanking[newValue]; //if feasible, 0 + newValue is used
-        		}
+        		numberOfPossibleQueues = newQueueRankingLength / 2;
         	}
+        	//how many queues are being considered
+        	
+        	final int newValue;
+        	//if infeasible, how many positions to go back (from the last position)
+        	//if feasible, how many positions to go forward (from the first position, which is 0 + offset)
+        	
+        	if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) {
+        		LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value, so newValue = 0");
+        		newValue = 0;
+        	} else {
+        		LOGGER.info("[updateIndexInfeasibility] There are %d possible queues", numberOfPossibleQueues);
+    			
+            	LOGGER.info("[updateIndexInfeasibility] Number of possible values for voting: %d", numberOfPossibleVoting);
+            	
+        		LOGGER.info("[updateIndexInfeasibility] Applying a linear transformation");
+                //linear transformation, rounding to the closest int
+                				
+                final int oldValue = voting;
+                
+                final int oldBottom = JBSEResultInputOutputBuffer.K / 2 + 1; //floor(K/2)+1
+                
+                final int oldTop = JBSEResultInputOutputBuffer.K; //the max value which voting can be
+                //voting in [floor(K/2)+1, K]
+                
+                //if for example we have voting in [2, 3] and newValue in [0, 1] we want to associate 3 (= K) to 0 and not 1,
+            	//so what we're doing is use the negative interval for newValue, so [-1, 0], and then consider the abs. value for the result,
+                //to associate 2 to 1 and 3 to 0
+                				
+                final int newBottom = -1 * (numberOfPossibleQueues - 1); 
+                //subtract 1 since indexing starts from 0, so if we have 2 queues it's [-1, 0] which are 2 values
+                final int newTop = 0;
+                //the result is in [-(numberOfPossibleQueues-1), 0] for the reason described above, and then only the absolute value is used
+                				
+                //there can't be a division by zero because it only happens
+                //when K = 1 or 2 but that means numberOfPossibleVoting = 1
+                //so this statement isn't reached
+                				
+                //I multiply the denominator by 1.0d to use floating point values and then round the result
+                newValue = Math.abs((int) Math.round((oldValue - oldBottom) / (1.0d * oldTop - oldBottom) * (newTop - newBottom) + newBottom));
+                //using the abs. value as described above
+                
+                LOGGER.info("[updateIndexInfeasibility] Transformed voting = %d in [%d, %d] to a new value = %d which is the abs. value of a number in [%d, 0]",
+                		voting, oldBottom, oldTop, newValue, newBottom);
+        	}
+            		
+            LOGGER.info("[updateIndexInfeasibility] Going %s from the %s position %d times", 
+            		!feasible ? "back" : "forward", !feasible ? "last" : "first (0 + offset)", newValue);
+            
+            indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 1 - newValue]
+            		: this.queueRanking[offset + newValue]; //if feasible, 0 + offset + newValue is used
         }
         
         //TODO remove this log
         LOGGER.info("Got index infeasibility = %d", indexInfeasibility);
         
-        if (indexInfeasibility != this.queueRanking[0]) { //priority != max
+        if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
         	if (oldIndexInfeasibility != indexInfeasibility) { //could be the same because this method is invoked in the class PerformerJBSE too
 	        	LOGGER.info("[updateIndexInfeasibility, NOT MAX, unknown = %b, voting = %d, feasible = %b] Changed the infeasibility index from %d to %d, path = %s", 
