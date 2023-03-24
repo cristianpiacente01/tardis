@@ -132,6 +132,27 @@ final class ClassifierKNN {
         	output = ClassificationResult.unknown();
         }
         
+        //print if the output label and the ground truth aren't the same
+        
+        final String pathCondition; 
+        //I pass the whole PC to the method Util.calculateGroundTruth just to be coherent with TestDetector, 
+        //even if I could just pass the core because I don't need to check the context too
+        if (!query.getSpecificContextString().trim().isEmpty()) {
+        	//the context is not empty
+        	pathCondition = query.getSpecificContextString() + " && " + query.getSpecificCoreString();
+        } else {
+        	//the context is empty
+        	pathCondition = query.getSpecificCoreString();
+        }
+        
+        final boolean groundTruth = Util.calculateGroundTruth(pathCondition);
+        
+        if (output.getLabel() != groundTruth) {
+        	//classification != ground truth
+        	LOGGER.warn("GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", groundTruth, output.getLabel(), pathCondition);
+        }
+        
+        
         return output;
     }
 

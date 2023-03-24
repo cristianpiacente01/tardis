@@ -359,6 +359,43 @@ public final class Util {
     	return Math.abs(a - b) < 0.000001d; //this should be the correct way to check if two floating point values are equal, not the == operator
     }
     
+    //just for the example MIPC (ManyInfeasiblePC)
+  	public static boolean calculateGroundTruth(String pathCondition) {
+  		if (pathCondition.contains("null") || pathCondition.contains("aliases") || pathCondition.contains("<(~")) {
+  			return false;
+  		}
+  		
+  		//pattern: digit *inequality sign* array.length
+  		final Pattern patternLength = Pattern.compile(".*\\((\\d{1,2})\\)([^\\w]{1,2})\\(\\{ROOT\\}:this.mipc\\/MIPC:(\\w).length\\).*");
+  		
+  		String[] clauses = pathCondition.split(" && ");
+  		for (String clause : clauses) {
+  			final Matcher matcherLength = patternLength.matcher(clause);
+            if (matcherLength.matches()) {
+                final int digit = Integer.parseInt(matcherLength.group(1)); //I named this variable "digit" but it can also be 10...
+                final String sign = matcherLength.group(2);
+                final char array = matcherLength.group(3).charAt(0);
+                
+                final int knownArrayLength = array == 'a' ? 5 : 10; //a.length is 5, b.length is 10
+                
+                if (sign.equals("<=") && !(digit <= knownArrayLength)) {
+                	return false;
+                }
+                if (sign.equals("<") && !(digit < knownArrayLength)) {
+                	return false;
+                }
+                if (sign.equals(">=") && !(digit >= knownArrayLength)) {
+                	return false;
+                }
+                if (sign.equals(">") && !(digit > knownArrayLength)) {
+                	return false;
+                }
+            }
+  		}
+          
+  		return true;
+  	}
+    
     /**
      * Do not instantiate!
      */

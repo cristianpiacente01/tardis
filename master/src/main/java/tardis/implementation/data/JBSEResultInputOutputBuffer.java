@@ -596,16 +596,13 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - JBSEResultInputOutputBuffer.K / 2;
     	//how many possible voting values there are,
     	//which go from floor(K/2)+1 to K,
-    	//which would be K/2 values if K is even,
-    	//but not if it's odd, 
-    	//so to make it work in general it's K - (floor(K/2)+1) + 1
-    	//= K - floor(K/2)-1+1 = K - floor(K/2)
+        //so K - (floor(K/2)+1) + 1 = K - floor(K/2)-1+1 = K - floor(K/2)
 		
     	//e.g. if K = 10 then we can have {6,7,8,9,10} so 5
     	//e.g. if K = 11 then we can have {6,7,8,9,10,11} so 6
         
-        final int offset;
-        //to calculate it: the number of unused queues (feasible + infeasible)
+        final int offset; //how many queues to skip from the left
+        //to calculate it: it's the number of unused queues (feasible + infeasible)
         
         //# unused queues = # queues - # used queues, 
         //so consider number of possible queues - number of possible voting values
@@ -620,12 +617,12 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         }
         	
         if (unusedFeasibleQueues + unusedInfeasibleQueues > 0) {
+        	//the linear transformation is not surjective
         	offset = unusedFeasibleQueues + unusedInfeasibleQueues;
-        	//the linear transformation (below) is not surjective
         } else {
         	//the linear transformation is not injective if numberOfPossibleVoting is too high, 
         	//so the cardinality of the domain is greater than the codomain's (number of possible queues),
-        	//we don't care about this, as long as it's surjective
+        	//we don't care about this as long as it's surjective
         	offset = 0;
         }
         

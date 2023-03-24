@@ -18,6 +18,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import tardis.Options;
+import tardis.implementation.common.Util;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
 
@@ -154,6 +155,13 @@ final class TestDetector implements Runnable {
             if (!generated.contains(testCount)) {
                 //logs the items whose test cases were not generated
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
+                
+                final boolean groundTruth = Util.calculateGroundTruth(stringifyPostFrontierPathCondition(item));
+                //I can't extract the core in this class so I'll just pass the whole PC string to the method calculateGroundTruth...
+                
+                if (groundTruth) { //groundTruth != false, so it's true but Evosuite failed to generate a test case
+                	LOGGER.warn("GROUND TRUTH = true, but Evosuite FAILED to generate a test case, PC = %s", stringifyPostFrontierPathCondition(item));
+                }
                 
                 //learns for update of indices
                 if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
