@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,6 +41,10 @@ final class TestDetector implements Runnable {
     private final Path evosuiteLogFilePath;
     private final BufferedWriter evosuiteLogFileWriter;
     private final JBSEResultInputOutputBuffer in;
+    
+    //used for ground truthing
+    private static AtomicInteger correctEvosuiteFails = new AtomicInteger(0);
+    private static AtomicInteger totalEvosuiteFails = new AtomicInteger(0);
 
     /**
      * Constructor.
@@ -156,12 +161,21 @@ final class TestDetector implements Runnable {
                 //logs the items whose test cases were not generated
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
                 
+                final int totalEvosuiteFails = TestDetector.totalEvosuiteFails.incrementAndGet();
+                
+                final int correctEvosuiteFails;
+                
                 final boolean groundTruth = Util.calculateGroundTruth(stringifyPostFrontierPathCondition(item));
                 //I can't extract the core in this class so I'll just pass the whole PC string to the method calculateGroundTruth...
                 
                 if (groundTruth) { //groundTruth != false, so it's true but Evosuite failed to generate a test case
                 	LOGGER.warn("GROUND TRUTH = true, but Evosuite FAILED to generate a test case, PC = %s", stringifyPostFrontierPathCondition(item));
+                	correctEvosuiteFails = TestDetector.correctEvosuiteFails.get();
+                } else {
+                	correctEvosuiteFails = TestDetector.correctEvosuiteFails.incrementAndGet();
                 }
+                
+                LOGGER.info("[run] Correct Evosuite fails: %d/%d", correctEvosuiteFails, totalEvosuiteFails);
                 
                 //learns for update of indices
                 if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method

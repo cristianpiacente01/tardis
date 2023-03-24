@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -27,6 +28,10 @@ final class ClassifierKNN {
 	
     private final int k;
     private final HashSet<TrainingItem> trainingSet = new HashSet<>();
+    
+    //used for ground truthing
+  	private static AtomicInteger correctClassifications = new AtomicInteger(0);
+  	private static AtomicInteger totalClassifications = new AtomicInteger(0);
     
     public ClassifierKNN(int k) {
         this.k = k;
@@ -132,7 +137,16 @@ final class ClassifierKNN {
         	output = ClassificationResult.unknown();
         }
         
+        if (output.isUnknown()) {
+        	//no ground truthing for unknown output, return it
+        	return output;
+        }
+        
         //print if the output label and the ground truth aren't the same
+        
+        final int totalClassifications = ClassifierKNN.totalClassifications.incrementAndGet();
+        
+        final int correctClassifications;
         
         final String pathCondition; 
         //I pass the whole PC to the method Util.calculateGroundTruth just to be coherent with TestDetector, 
@@ -150,8 +164,12 @@ final class ClassifierKNN {
         if (output.getLabel() != groundTruth) {
         	//classification != ground truth
         	LOGGER.warn("GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", groundTruth, output.getLabel(), pathCondition);
+        	correctClassifications = ClassifierKNN.correctClassifications.get();
+        } else {
+        	correctClassifications = ClassifierKNN.correctClassifications.incrementAndGet();
         }
         
+        LOGGER.info("[classify] Correct classifications: %d/%d", correctClassifications, totalClassifications);
         
         return output;
     }
