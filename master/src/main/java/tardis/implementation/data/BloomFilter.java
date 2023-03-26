@@ -1,5 +1,6 @@
 package tardis.implementation.data;
 
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import jbse.mem.Clause;
@@ -11,10 +12,10 @@ final class BloomFilter {
     private static final int[] PRIME_NUMBERS = {7, 11, 13};
 
     /** The number of columns (LENGTH) in the BitSet used for storing the CONTEXT. */
-    private static final int CTX_LENGTH = 32;
+    private static final int CTX_LENGTH = 64;
     
     /** The number of columns (LENGTH) in the BitSet used for storing the INFEASIBILITY CORE. */
-    private static final int CORE_LENGTH = 64;
+    private static final int CORE_LENGTH = 128;
     
     /** The only Bloom filter structure (only 1 BitSet) used for the context, for both specific and general */
     private final BitSet context = new BitSet(CTX_LENGTH);
@@ -32,6 +33,10 @@ final class BloomFilter {
     
     /** The specific infeasibility core string array, TODO remove this */
     private final String[] specificInfeasibilityCoreStrArray;
+    
+    /* EXPERIMENTING, used for infeasible classifications */
+    private final int[] specificLastClauseIndexes = new int[PRIME_NUMBERS.length];
+    private final int[] generalLastClauseIndexes = new int[PRIME_NUMBERS.length];
 
 
     BloomFilter(List<Clause> path) {
@@ -84,6 +89,10 @@ final class BloomFilter {
                 //sets the bit corresponding to the specific index to 1
                 this.generalInfeasibilityCore.set(indexGeneral);
                 this.specificInfeasibilityCore.set(indexSpecific);
+                if (i == specificInfeasibilityCore.length - 1) {
+                	specificLastClauseIndexes[j] = indexSpecific;
+                	generalLastClauseIndexes[j] = indexGeneral;
+                }
             }  
         }
         
@@ -119,14 +128,26 @@ final class BloomFilter {
         return retVal;
     }
 	
-    boolean containsOtherCore(BloomFilter other, boolean specific) {
+    boolean containsOtherCore(BloomFilter other, boolean specific, boolean itemLabel) {
     	final BitSet thisCore = specific ? this.specificInfeasibilityCore : this.generalInfeasibilityCore;
     	final BitSet otherCore = specific ? other.specificInfeasibilityCore : other.generalInfeasibilityCore;
     	
-    	//this core AND other core = other core
-    	final BitSet tmpIntersection = (BitSet) thisCore.clone(); //clone is needed because the "and" method modifies the BitSet
-    	tmpIntersection.and(otherCore);
-        return tmpIntersection.equals(otherCore);
+    	if (itemLabel) {
+    		//feasible, check everything
+    		
+    		//this core AND other core = other core
+    		final BitSet tmpIntersection = (BitSet) thisCore.clone(); //clone is needed because the "and" method modifies the BitSet
+    		tmpIntersection.and(otherCore);
+    		return tmpIntersection.equals(otherCore);
+    	} else {
+    		//infeasible, check only the last clause
+    		
+    		final int[] thisIndexes = specific ? this.specificLastClauseIndexes : this.generalLastClauseIndexes;
+    		final int[] otherIndexes = specific ? other.specificLastClauseIndexes : other.generalLastClauseIndexes;
+    		
+    		return Arrays.equals(thisIndexes, otherIndexes);
+    	}
+    	
     }
     
 	@Override

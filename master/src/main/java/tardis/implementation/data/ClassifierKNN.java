@@ -53,47 +53,55 @@ final class ClassifierKNN {
     		return trainingSetTooSmallOutput;
     	}
     	
+    	//used for ground truthing
+    	boolean infeasibleExists = false; //true iff at least an infeasible item is in the training set
+    	
     	//for every item in the training set, calculate the neighbor's similarity score and store it with the label
     	final ArrayList<Neighbor> neighborRanking = new ArrayList<>();
     	
         for (TrainingItem item : this.trainingSet) {
+        	//set infeasibleExists to true if there's an infeasible item
+        	if (!infeasibleExists && !item.getLabel()) {
+        		infeasibleExists = true;
+        	}
+        	
         	final BloomFilter itemBloomFilter = item.getBloomFilter();
         	
         	final double similarity; 
         	
         	final double ctxSimilarity = query.ctxJaccardSimilarity(itemBloomFilter); //context Jaccard similarity coefficient
         	
+        	final boolean itemLabel = item.getLabel(); //this item's label
+        	
         	/*
         	 * if the item is feasible, we have a relation if
-        	 * the item contains the query, otherwise if the query contains the item
+        	 * the item contains the whole query's core, otherwise if the query contains the item's last clause
         	 * 
         	 * e.g. we have A && B && C && D feasible in the training set
         	 * and our query is A && B && C
         	 * 
         	 * e.g. we have A && B && C infeasible in the training set
-        	 * and our query is A && B && C && D
+        	 * and our query is D && C, it could be infeasible because of C
         	*/
-        	
         	
         	//we'll check if first contains second
         	
-        	final BloomFilter first = item.getLabel() ? itemBloomFilter : query;
-        	final BloomFilter second = item.getLabel() ? query : itemBloomFilter; 
+        	final BloomFilter first = itemLabel ? itemBloomFilter : query;
+        	final BloomFilter second = itemLabel ? query : itemBloomFilter; 
         	
-        	//if first's core contains second's core we have a relation
         	//if there's no relation between the specific cores then the general cores are checked too
         	
-        	if (first.containsOtherCore(second, true)) { //specific (concrete) cores
-        		similarity = 2.0d + ctxSimilarity;
+        	if (first.containsOtherCore(second, true, itemLabel)) { //specific (concrete) cores
+        		similarity = (itemLabel ? 2.0d : 4.0d) + ctxSimilarity;
         	} 
-        	else if (first.containsOtherCore(second, false)) { //general (abstract) cores
-        		similarity = 1.0d + ctxSimilarity;
+        	else if (first.containsOtherCore(second, false, itemLabel)) { //general (abstract) cores
+        		similarity = (itemLabel ? 1.0d : 3.0d) + ctxSimilarity;
         	}
         	else {
         		similarity = 0.0d;
         	}
         	
-        	neighborRanking.add(new Neighbor(similarity, item.getLabel()));
+        	neighborRanking.add(new Neighbor(similarity, itemLabel));
         }
         
         Collections.sort(neighborRanking, new NeighborComparator());
@@ -137,42 +145,43 @@ final class ClassifierKNN {
         	output = ClassificationResult.unknown();
         }
         
-        if (output.isUnknown()) {
-        	//no ground truthing for unknown output, return it
-        	return output;
+        if (!output.isUnknown() && infeasibleExists) {
+        	//ground truthing for known classifications and there's at least an infeasible item
+        	ClassifierKNN.groundTruthingClassification(query, output);
         }
-        
-        //print if the output label and the ground truth aren't the same
-        
-        final int totalClassifications = ClassifierKNN.totalClassifications.incrementAndGet();
-        
-        final int correctClassifications;
-        
-        final String pathCondition; 
-        //I pass the whole PC to the method Util.calculateGroundTruth just to be coherent with TestDetector, 
-        //even if I could just pass the core because I don't need to check the context too
-        if (!query.getSpecificContextString().trim().isEmpty()) {
-        	//the context is not empty
-        	pathCondition = query.getSpecificContextString() + " && " + query.getSpecificCoreString();
-        } else {
-        	//the context is empty
-        	pathCondition = query.getSpecificCoreString();
-        }
-        
-        final boolean groundTruth = Util.calculateGroundTruth(pathCondition);
-        
-        if (output.getLabel() != groundTruth) {
-        	//classification != ground truth
-        	LOGGER.warn("GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", groundTruth, output.getLabel(), pathCondition);
-        	correctClassifications = ClassifierKNN.correctClassifications.get();
-        } else {
-        	correctClassifications = ClassifierKNN.correctClassifications.incrementAndGet();
-        }
-        
-        LOGGER.info("[classify] Correct classifications: %d/%d", correctClassifications, totalClassifications);
         
         return output;
     }
+
+    //not synchronized because there's only a classifier instance
+	private static void groundTruthingClassification(BloomFilter query, ClassificationResult output) {
+		final int totalClassifications = ClassifierKNN.totalClassifications.incrementAndGet();
+		
+		final int correctClassifications;
+		    
+		final String pathCondition; 
+		//I pass the whole PC to the method Util.calculateGroundTruth just to be coherent with TestDetector, 
+		//even if I could just pass the core because I don't need to check the context too
+		if (!query.getSpecificContextString().isEmpty()) {
+		    //the context is not empty
+		    pathCondition = query.getSpecificContextString() + " && " + query.getSpecificCoreString();
+		} else {
+		    //the context is empty
+			pathCondition = query.getSpecificCoreString();
+		}
+		    
+		final boolean groundTruth = Util.calculateGroundTruth(pathCondition);
+		    
+		if (output.getLabel() != groundTruth) {
+		    //classification != ground truth
+		    LOGGER.warn("GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", groundTruth, output.getLabel(), pathCondition);
+		    correctClassifications = ClassifierKNN.correctClassifications.get();
+		} else {
+		    correctClassifications = ClassifierKNN.correctClassifications.incrementAndGet();
+		}
+		    
+		LOGGER.info("[classify] Correct classifications: %d/%d", correctClassifications, totalClassifications);
+	}
 
     private static class Neighbor {
     	private final double similarity;

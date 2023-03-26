@@ -161,21 +161,7 @@ final class TestDetector implements Runnable {
                 //logs the items whose test cases were not generated
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
                 
-                final int totalEvosuiteFails = TestDetector.totalEvosuiteFails.incrementAndGet();
-                
-                final int correctEvosuiteFails;
-                
-                final boolean groundTruth = Util.calculateGroundTruth(stringifyPostFrontierPathCondition(item));
-                //I can't extract the core in this class so I'll just pass the whole PC string to the method calculateGroundTruth...
-                
-                if (groundTruth) { //groundTruth != false, so it's true but Evosuite failed to generate a test case
-                	LOGGER.warn("GROUND TRUTH = true, but Evosuite FAILED to generate a test case, PC = %s", stringifyPostFrontierPathCondition(item));
-                	correctEvosuiteFails = TestDetector.correctEvosuiteFails.get();
-                } else {
-                	correctEvosuiteFails = TestDetector.correctEvosuiteFails.incrementAndGet();
-                }
-                
-                LOGGER.info("[run] Correct Evosuite fails: %d/%d", correctEvosuiteFails, totalEvosuiteFails);
+                TestDetector.groundTruthingEvosuiteFail(item);
                 
                 //learns for update of indices
                 if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
@@ -190,5 +176,24 @@ final class TestDetector implements Runnable {
             ++testCount;
         }
     }
+
+	//synchronized is needed to avoid wrong values of the counters, since there can be different TestDetector instances accessing at the same time
+	private static synchronized void groundTruthingEvosuiteFail(JBSEResult item) {
+		final int totalEvosuiteFails = TestDetector.totalEvosuiteFails.incrementAndGet();
+		
+		final int correctEvosuiteFails;
+		
+		final boolean groundTruth = Util.calculateGroundTruth(stringifyPostFrontierPathCondition(item));
+		//I can't extract the core in this class so I'll just pass the whole PC string to the method calculateGroundTruth...
+		
+		if (groundTruth) { //groundTruth != false, so it's true but Evosuite failed to generate a test case
+			LOGGER.warn("GROUND TRUTH = true, but Evosuite FAILED to generate a test case, PC = %s", stringifyPostFrontierPathCondition(item));
+			correctEvosuiteFails = TestDetector.correctEvosuiteFails.get();
+		} else {
+			correctEvosuiteFails = TestDetector.correctEvosuiteFails.incrementAndGet();
+		}
+		
+		LOGGER.info("[run] Correct Evosuite fails: %d/%d", correctEvosuiteFails, totalEvosuiteFails);
+	}
 }
 
