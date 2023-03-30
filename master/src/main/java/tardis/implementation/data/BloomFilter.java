@@ -129,11 +129,11 @@ final class BloomFilter {
     }
 	
     boolean containsOtherCore(BloomFilter other, boolean specific, boolean itemLabel) {
-    	final BitSet thisCore = specific ? this.specificInfeasibilityCore : this.generalInfeasibilityCore;
-    	final BitSet otherCore = specific ? other.specificInfeasibilityCore : other.generalInfeasibilityCore;
-    	
     	if (itemLabel) {
     		//feasible, check everything
+    		
+    		final BitSet thisCore = specific ? this.specificInfeasibilityCore : this.generalInfeasibilityCore;
+        	final BitSet otherCore = specific ? other.specificInfeasibilityCore : other.generalInfeasibilityCore;
     		
     		//this core AND other core = other core
     		final BitSet tmpIntersection = (BitSet) thisCore.clone(); //clone is needed because the "and" method modifies the BitSet

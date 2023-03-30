@@ -84,6 +84,8 @@ final class ClassifierKNN {
         	 * and our query is D && C, it could be infeasible because of C
         	*/
         	
+        	
+        	
         	//we'll check if first contains second
         	
         	final BloomFilter first = itemLabel ? itemBloomFilter : query;
@@ -92,10 +94,12 @@ final class ClassifierKNN {
         	//if there's no relation between the specific cores then the general cores are checked too
         	
         	if (first.containsOtherCore(second, true, itemLabel)) { //specific (concrete) cores
-        		similarity = (itemLabel ? 2.0d : 4.0d) + ctxSimilarity;
+        		similarity = 3.0d + ctxSimilarity;
         	} 
         	else if (first.containsOtherCore(second, false, itemLabel)) { //general (abstract) cores
-        		similarity = (itemLabel ? 1.0d : 3.0d) + ctxSimilarity;
+        		similarity = (itemLabel ? 1.0d : 2.0d) + ctxSimilarity;
+        		//if there's an abstract relation with feasible and infeasible items,
+        		//give more priority to the infeasible items
         	}
         	else {
         		similarity = 0.0d;
@@ -126,7 +130,7 @@ final class ClassifierKNN {
         final int countUncertain = this.k - countClassifyTrue - countClassifyFalse; //optimization, this is now a final variable
         
         LOGGER.info("[classify] countUncertain = %d, countClassifyFalse = %d, countClassifyTrue = %d", countUncertain, countClassifyFalse, countClassifyTrue);
-        
+
         //builds the output
         final ClassificationResult output;
         
