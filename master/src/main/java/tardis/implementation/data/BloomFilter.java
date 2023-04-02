@@ -1,6 +1,6 @@
 package tardis.implementation.data;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 import jbse.mem.Clause;
@@ -35,8 +35,8 @@ final class BloomFilter {
     private final String[] specificInfeasibilityCoreStrArray;
     
     /* EXPERIMENTING, used for infeasible classifications */
-    private final int[] specificLastClauseIndexes = new int[PRIME_NUMBERS.length];
-    private final int[] generalLastClauseIndexes = new int[PRIME_NUMBERS.length];
+    private final List<Integer> specificLastClauseIndexes = new ArrayList<>();
+    private final List<Integer> generalLastClauseIndexes = new ArrayList<>();
 
 
     BloomFilter(List<Clause> path) {
@@ -90,8 +90,8 @@ final class BloomFilter {
                 this.generalInfeasibilityCore.set(indexGeneral);
                 this.specificInfeasibilityCore.set(indexSpecific);
                 if (i == specificInfeasibilityCore.length - 1) {
-                	specificLastClauseIndexes[j] = indexSpecific;
-                	generalLastClauseIndexes[j] = indexGeneral;
+                	specificLastClauseIndexes.add(indexSpecific);
+                	generalLastClauseIndexes.add(indexGeneral);
                 }
             }  
         }
@@ -128,27 +128,68 @@ final class BloomFilter {
         return retVal;
     }
 	
-    boolean containsOtherCore(BloomFilter other, boolean specific, boolean itemLabel) {
-    	if (itemLabel) {
-    		//feasible, check everything
+    double coreSimilarity(BloomFilter other, boolean specific, boolean itemLabel) {
+    	final BitSet thisCore = specific ? this.specificInfeasibilityCore : this.generalInfeasibilityCore;
+    	final BitSet otherCore = specific ? other.specificInfeasibilityCore : other.generalInfeasibilityCore;
+    	
+    	final double baseScore = specific ? 2.0d : 1.0d; //this is used only if there's a relation
+    	
+    	final double retVal; //if there's a relation, retVal is baseScore + ratio, otherwise 0.0d
+    	
+    	if (itemLabel) { 
+    		//training item is feasible
     		
-    		final BitSet thisCore = specific ? this.specificInfeasibilityCore : this.generalInfeasibilityCore;
-        	final BitSet otherCore = specific ? other.specificInfeasibilityCore : other.generalInfeasibilityCore;
+    		//check if this core contains ALL the clauses of other core, a strong relation
     		
-    		//this core AND other core = other core
     		final BitSet tmpIntersection = (BitSet) thisCore.clone(); //clone is needed because the "and" method modifies the BitSet
     		tmpIntersection.and(otherCore);
-    		return tmpIntersection.equals(otherCore);
+    		
+    		if (tmpIntersection.equals(otherCore)) {
+    			retVal = baseScore + 1.0d;
+    			//if specific then 3.0d
+    			//if general then 2.0d
+    		} else {
+    			retVal = 0.0d;
+    		}
+    		
     	} else {
-    		//infeasible, check only the last clause
+    		//training item is infeasible
     		
-    		final int[] thisIndexes = specific ? this.specificLastClauseIndexes : this.generalLastClauseIndexes;
-    		final int[] otherIndexes = specific ? other.specificLastClauseIndexes : other.generalLastClauseIndexes;
+    		//if last clause isn't in both cores then there's no relation
     		
-    		return Arrays.equals(thisIndexes, otherIndexes);
+    		final List<Integer> thisIndexes = specific ? this.specificLastClauseIndexes : this.generalLastClauseIndexes;
+    		final List<Integer> otherIndexes = specific ? other.specificLastClauseIndexes : other.generalLastClauseIndexes;
+    		
+    		if (!thisIndexes.equals(otherIndexes)) {
+    			retVal = 0.0d;
+    		} else {
+    			//let's count how many clauses are common, skipping the last one since we've already checked for it
+    			
+    			final int otherCardinality = otherCore.cardinality() - otherIndexes.size(); 
+    			//number of bits set to true in the other core
+    			//which don't correspond to the last clause
+        		
+        		double both = 0.0d; 
+        		//how many bits set to true in the other core are also set to true in this core
+        		//not considering the last clause
+        		
+        		for (int i = 0; i < CORE_LENGTH; ++i) {
+        			if (otherCore.get(i) == true && !otherIndexes.contains(i)) { //i mustn't refer to the last clause
+        				if (thisCore.get(i) & otherCore.get(i) == otherCore.get(i)) { //which means thisCore.get(i) == true
+        					++both;
+        				}
+        			} //else do nothing
+        		}
+        		
+        		final double ratio = both / otherCardinality;
+        		
+        		retVal = baseScore + ratio;
+        		//if specific then it's in [2.0d, 3.0d]
+        		//if general then it's in [1.0d, 2.0d]
+    		}
     	}
-    	
-    }
+    	return retVal;
+	}
     
 	@Override
 	public int hashCode() {

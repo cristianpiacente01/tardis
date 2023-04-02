@@ -69,21 +69,19 @@ final class ClassifierKNN {
         	
         	final double similarity; 
         	
-        	final double ctxSimilarity = query.ctxJaccardSimilarity(itemBloomFilter); //context Jaccard similarity coefficient
-        	
         	final boolean itemLabel = item.getLabel(); //this item's label
         	
         	/*
         	 * if the item is feasible, we have a relation if
-        	 * the item contains the whole query's core, otherwise if the query contains the item's last clause
+        	 * the item contains the query's core, 
+        	 * otherwise if the query contains the item's last clause and eventually more clauses of the core
         	 * 
         	 * e.g. we have A && B && C && D feasible in the training set
-        	 * and our query is A && B && C
+        	 * and our query is A && B && C, it's feasible for sure
         	 * 
         	 * e.g. we have A && B && C infeasible in the training set
         	 * and our query is D && C, it could be infeasible because of C
         	*/
-        	
         	
         	
         	//we'll check if first contains second
@@ -91,17 +89,28 @@ final class ClassifierKNN {
         	final BloomFilter first = itemLabel ? itemBloomFilter : query;
         	final BloomFilter second = itemLabel ? query : itemBloomFilter; 
         	
-        	//if there's no relation between the specific cores then the general cores are checked too
+        	final double specificCoreSimilarity = first.coreSimilarity(second, true, itemLabel);
+        	final double generalCoreSimilarity = first.coreSimilarity(second, false, itemLabel);
         	
-        	if (first.containsOtherCore(second, true, itemLabel)) { //specific (concrete) cores
-        		similarity = 3.0d + ctxSimilarity;
-        	} 
-        	else if (first.containsOtherCore(second, false, itemLabel)) { //general (abstract) cores
-        		similarity = (itemLabel ? 1.0d : 2.0d) + ctxSimilarity;
-        		//if there's an abstract relation with feasible and infeasible items,
-        		//give more priority to the infeasible items
-        	}
-        	else {
+        	//consider the max similarity which can be the specific core similarity or the general core similarity
+        	
+        	final double maxCoreSimilarity = Math.max(specificCoreSimilarity, generalCoreSimilarity);
+        	
+        	if (!Util.doubleEquals(maxCoreSimilarity, 0.0d)) {
+        		//extract the ratio
+        		final double ratio;
+        		final double floor; //floor of the similarity, to which the weighted ratio and the weighted context similarity get added
+        		if (Util.doubleEquals(maxCoreSimilarity % 1, 0.0d)) { //the decimal part is 0.0d which means the ratio was 1.0d
+        			ratio = 1.0d;
+        			floor = Math.floor(maxCoreSimilarity - 1);
+        		} else {
+        			ratio = maxCoreSimilarity % 1; //modulo 1 to get the decimal part which is also the ratio here
+        			floor = Math.floor(maxCoreSimilarity);
+        		}
+        		//weight the ratio 80% and weight the context similarity 20%
+        		similarity = floor + (0.8d * ratio) + (0.2d * query.ctxJaccardSimilarity(itemBloomFilter));
+        	} else {
+        		//no relation, nothing to do
         		similarity = 0.0d;
         	}
         	
