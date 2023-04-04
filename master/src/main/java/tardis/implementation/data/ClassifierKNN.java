@@ -42,7 +42,7 @@ final class ClassifierKNN {
         this.trainingSet.addAll(newTrainingSet);
     }
 
-    public ClassificationResult classify(BloomFilter query) {
+    public ClassificationResult classify(BloomFilter query, boolean reclassifying) { //the second parameter is for logging purposes
     	LOGGER.info("[classify] Classifying query with\n"
     			+ "\t\t specific context: %s\n"
     			+ "\t\t specific core: %s", 
@@ -123,14 +123,16 @@ final class ClassifierKNN {
         
         if (!output.isUnknown() && infeasibleExists) {
         	//ground truthing for known classifications and there's at least an infeasible item
-        	ClassifierKNN.groundTruthingClassification(query, output);
+        	ClassifierKNN.groundTruthingClassification(query, output, reclassifying);
         }
         
         return output;
     }
 
     //not synchronized because there's only a classifier instance
-	private static void groundTruthingClassification(BloomFilter query, ClassificationResult output) {
+	private static void groundTruthingClassification(BloomFilter query, ClassificationResult output, boolean reclassifying) { 
+		//the third parameter is for logging purposes
+		
 		final int totalClassifications = ClassifierKNN.totalClassifications.incrementAndGet();
 		
 		final int correctClassifications;
@@ -150,7 +152,8 @@ final class ClassifierKNN {
 		    
 		if (output.getLabel() != groundTruth) {
 		    //classification != ground truth
-		    LOGGER.warn("GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", groundTruth, output.getLabel(), pathCondition);
+		    LOGGER.warn("[reclassifying = %b] GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", reclassifying,
+		    		groundTruth, output.getLabel(), pathCondition);
 		    correctClassifications = ClassifierKNN.correctClassifications.get();
 		} else {
 		    correctClassifications = ClassifierKNN.correctClassifications.incrementAndGet();

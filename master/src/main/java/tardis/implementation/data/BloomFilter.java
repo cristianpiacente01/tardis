@@ -27,7 +27,7 @@ final class BloomFilter {
     /** A Bloom filter structure (only 1 BitSet), used for the GENERAL infeasibility core */
     private final BitSet generalInfeasibilityCore = new BitSet(CORE_LENGTH);
     
-    /** A List of BloomFilter where each one singularly represents a clause of the core */
+    /** Bloom filters where each one singularly represents a clause of the core */
     private final List<BloomFilter> coreBloomFilters = new ArrayList<>();
     
     /* TODO: remove the arrays of String below, they're still here only for logging purposes */
@@ -179,19 +179,8 @@ final class BloomFilter {
 		
 		//adjusted specific and general ratio
 		
-		final double specificRatio;
-		if (specificCount / size > 1.0d) {
-			specificRatio = 1.0d;
-		} else {
-			specificRatio = specificCount / size;
-		}
-				
-		final double generalRatio;
-		if (generalCount / size > 1.0d) {
-			generalRatio = 1.0d;
-		} else {
-			generalRatio = generalCount / size;
-		}
+		final double specificRatio = Math.min(1.0d, specificCount / size);
+		final double generalRatio = Math.min(1.0d, generalCount / size);
 		
 		//return the average ratio (never 0.0d, since at least the last general clause is the same) and the context Jaccard similarity
 		

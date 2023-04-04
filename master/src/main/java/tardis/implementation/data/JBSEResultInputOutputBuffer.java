@@ -216,7 +216,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         	updateIndexNovelty(entryPoint, pathCondition);
         }
         if (this.useIndexInfeasibility) {
-        	updateIndexInfeasibility(entryPoint, pathCondition);
+        	updateIndexInfeasibility(entryPoint, pathCondition, false);
         }
         final int queueNumber = calculateQueueNumber(entryPoint, pathCondition);
         if (queueRanking[queueNumber] < queueRanking.length - 1) {
@@ -393,7 +393,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
 					//LOGGER.info("[reclassify] This should get printed at least once");
                 	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
                     final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
-                    updateIndexInfeasibility(entryPoint, pathCondition);
+                    updateIndexInfeasibility(entryPoint, pathCondition, true);
                     final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                     if (queueNumberNew != queueNumber) {
                         this.queues.get(queueNumber).remove(bufferedJBSEResult);
@@ -583,12 +583,12 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      */
-    private void updateIndexInfeasibility(String entryPoint, List<Clause> path) {
+    private void updateIndexInfeasibility(String entryPoint, List<Clause> path, boolean reclassifying) { //the third parameter is for logging purposes
         final BloomFilter bloomFilter = this.treePath.getBloomFilter(entryPoint, path);
         if (bloomFilter == null) {
             throw new AssertionError("Attempted to update the infeasibility index of a path condition that was not yet inserted in the TreePath.");
         }
-        final ClassificationResult result = this.classifier.classify(bloomFilter);
+        final ClassificationResult result = this.classifier.classify(bloomFilter, reclassifying);
         final boolean unknown = result.isUnknown();
         final boolean feasible = result.getLabel();
         final int voting = result.getVoting();
