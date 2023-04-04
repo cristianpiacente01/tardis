@@ -117,8 +117,7 @@ final class SlicingManager {
             if (clauseArrayInput[k] != null) { 
                 valuesSpecific.add(specificArray[k]);
                 valuesGeneral.add(generalArray[k]);
-            }
-			else { //new
+            } else { //new
             	contextSpecific.add(specificArray[k]);
             	contextGeneral.add(generalArray[k]);
             }

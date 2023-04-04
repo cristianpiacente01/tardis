@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 import jbse.mem.Clause;
+import tardis.implementation.evosuite.Pair;
 
 //TODO javadoc description
 
@@ -26,17 +27,16 @@ final class BloomFilter {
     /** A Bloom filter structure (only 1 BitSet), used for the GENERAL infeasibility core */
     private final BitSet generalInfeasibilityCore = new BitSet(CORE_LENGTH);
     
+    /** A List of BloomFilter where each one singularly represents a clause of the core */
+    private final List<BloomFilter> coreBloomFilters = new ArrayList<>();
+    
     /* TODO: remove the arrays of String below, they're still here only for logging purposes */
     
     /** The specific context string array, TODO remove this */
-    private final String[] specificContextStrArray;
+    private String[] specificContextStrArray;
     
     /** The specific infeasibility core string array, TODO remove this */
-    private final String[] specificInfeasibilityCoreStrArray;
-    
-    /* EXPERIMENTING, used for infeasible classifications */
-    private final List<Integer> specificLastClauseIndexes = new ArrayList<>();
-    private final List<Integer> generalLastClauseIndexes = new ArrayList<>();
+    private String[] specificInfeasibilityCoreStrArray;
 
 
     BloomFilter(List<Clause> path) {
@@ -77,6 +77,13 @@ final class BloomFilter {
         
         //fill the two infeasibility core BitSets
         for (int i = 0; i < specificInfeasibilityCore.length; ++i) {
+        	
+        	final BloomFilter tmp = new BloomFilter(new ArrayList<>()); 
+        	//empty, there's no recursion because with an empty List of clauses we have specificInfeasibilityCore.length = 0,
+        	//so this loop is never executed when creating tmp
+        	
+        	tmp.specificInfeasibilityCoreStrArray = new String[] {specificInfeasibilityCore[i]}; //TODO remove this
+        	
             //apply different hash functions for each clause
             for (int j = 0; j < PRIME_NUMBERS.length; ++j) {
                 final long hashGeneral = 31 * PRIME_NUMBERS[j] + generalInfeasibilityCore[i].hashCode();
@@ -89,11 +96,13 @@ final class BloomFilter {
                 //sets the bit corresponding to the specific index to 1
                 this.generalInfeasibilityCore.set(indexGeneral);
                 this.specificInfeasibilityCore.set(indexSpecific);
-                if (i == specificInfeasibilityCore.length - 1) {
-                	specificLastClauseIndexes.add(indexSpecific);
-                	generalLastClauseIndexes.add(indexGeneral);
-                }
+                
+                tmp.generalInfeasibilityCore.set(indexGeneral);
+                tmp.specificInfeasibilityCore.set(indexSpecific);
+                
             }  
+            
+            this.coreBloomFilters.add(tmp);
         }
         
     }
@@ -127,68 +136,66 @@ final class BloomFilter {
         }
         return retVal;
     }
-	
-    double coreSimilarity(BloomFilter other, boolean specific, boolean itemLabel) {
-    	final BitSet thisCore = specific ? this.specificInfeasibilityCore : this.generalInfeasibilityCore;
-    	final BitSet otherCore = specific ? other.specificInfeasibilityCore : other.generalInfeasibilityCore;
-    	
-    	final double baseScore = specific ? 2.0d : 1.0d; //this is used only if there's a relation
-    	
-    	final double retVal; //if there's a relation, retVal is baseScore + ratio, otherwise 0.0d
-    	
-    	if (itemLabel) { 
-    		//training item is feasible
-    		
-    		//check if this core contains ALL the clauses of other core, a strong relation
-    		
-    		final BitSet tmpIntersection = (BitSet) thisCore.clone(); //clone is needed because the "and" method modifies the BitSet
-    		tmpIntersection.and(otherCore);
-    		
-    		if (tmpIntersection.equals(otherCore)) {
-    			retVal = baseScore + 1.0d;
-    			//if specific then 3.0d
-    			//if general then 2.0d
-    		} else {
-    			retVal = 0.0d;
-    		}
-    		
-    	} else {
-    		//training item is infeasible
-    		
-    		//if last clause isn't in both cores then there's no relation
-    		
-    		final List<Integer> thisIndexes = specific ? this.specificLastClauseIndexes : this.generalLastClauseIndexes;
-    		final List<Integer> otherIndexes = specific ? other.specificLastClauseIndexes : other.generalLastClauseIndexes;
-    		
-    		if (!thisIndexes.equals(otherIndexes)) {
-    			retVal = 0.0d;
-    		} else {
-    			//let's count how many clauses are common, skipping the last one since we've already checked for it
-    			
-    			final int otherCardinality = otherCore.cardinality() - otherIndexes.size(); 
-    			//number of bits set to true in the other core
-    			//which don't correspond to the last clause
-        		
-        		double both = 0.0d; 
-        		//how many bits set to true in the other core are also set to true in this core
-        		//not considering the last clause
-        		
-        		for (int i = 0; i < CORE_LENGTH; ++i) {
-        			if (otherCore.get(i) == true && !otherIndexes.contains(i)) { //i mustn't refer to the last clause
-        				if (thisCore.get(i) & otherCore.get(i) == otherCore.get(i)) { //which means thisCore.get(i) == true
-        					++both;
-        				}
-        			} //else do nothing
-        		}
-        		
-        		final double ratio = both / otherCardinality;
-        		
-        		retVal = baseScore + ratio;
-        		//if specific then it's in [2.0d, 3.0d]
-        		//if general then it's in [1.0d, 2.0d]
-    		}
+    
+    Pair<Double, Double> calculateOtherSimilarity(BloomFilter other) {
+    	if (this.coreBloomFilters.size() == 0 || other.coreBloomFilters.size() == 0) {
+    		return new Pair<Double, Double>(0.0d, 0.0d); //nothing to do here
     	}
-    	return retVal;
+		
+		final BloomFilter thisCoreLastClause = this.coreBloomFilters.get(this.coreBloomFilters.size() - 1);
+		final BloomFilter otherCoreLastClause = other.coreBloomFilters.get(other.coreBloomFilters.size() - 1);
+		
+		//the last general clause isn't the same, no relation
+		if (!thisCoreLastClause.generalInfeasibilityCore.equals(otherCoreLastClause.generalInfeasibilityCore)) {
+			return new Pair<Double, Double>(0.0d, 0.0d);
+		}
+		
+		double specificCount = 0.0d;
+		double generalCount = 0.0d;
+		//count how many clauses are common
+		
+		final int size = other.coreBloomFilters.size();
+		//how many clauses can be common in total, since this core has to contain other core
+		
+		for (BloomFilter otherClause : other.coreBloomFilters) {
+			//check if this core contains otherClause
+			//in both cases specific and general
+			
+			//this specific core AND other specific clause = other specific clause
+	    	final BitSet specificIntersection = (BitSet) this.specificInfeasibilityCore.clone();
+	    	specificIntersection.and(otherClause.specificInfeasibilityCore);
+	        if (specificIntersection.equals(otherClause.specificInfeasibilityCore)) {
+	        	++specificCount;
+	        }
+	        
+	        //this general core AND other general clause = other general clause
+	    	final BitSet generalIntersection = (BitSet) this.generalInfeasibilityCore.clone();
+	    	generalIntersection.and(otherClause.generalInfeasibilityCore);
+	        if (generalIntersection.equals(otherClause.generalInfeasibilityCore)) {
+	        	++generalCount;
+	        }
+	        
+		}
+		
+		//adjusted specific and general ratio
+		
+		final double specificRatio;
+		if (specificCount / size > 1.0d) {
+			specificRatio = 1.0d;
+		} else {
+			specificRatio = specificCount / size;
+		}
+				
+		final double generalRatio;
+		if (generalCount / size > 1.0d) {
+			generalRatio = 1.0d;
+		} else {
+			generalRatio = generalCount / size;
+		}
+		
+		//return the average ratio (never 0.0d, since at least the last general clause is the same) and the context Jaccard similarity
+		
+		return new Pair<Double, Double>(((specificRatio + generalRatio) / 2.0d), this.ctxJaccardSimilarity(other));
 	}
     
 	@Override

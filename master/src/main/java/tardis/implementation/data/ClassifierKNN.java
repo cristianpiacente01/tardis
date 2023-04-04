@@ -11,13 +11,14 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import tardis.implementation.common.Util;
+import tardis.implementation.evosuite.Pair;
 
 /**
  * Class that predicts the possible label of a given path condition by comparing the
  * infeasibility core of the item to be classified 
- * with the infeasibility core of all the items in the training set:
- * if there's no relation then the Jaccard distance between the contexts is used 
- * to perform the classification based on a similarity score.
+ * with the infeasibility core of all the items in the training set;
+ * to perform the classification, the Jaccard similarity coefficient is used in case 
+ * there is more than 1 neighbor with the same score (average ratio).
  * 
  * @author Matteo Modonato
  * @author Pietro Braione
@@ -56,7 +57,7 @@ final class ClassifierKNN {
     	//used for ground truthing
     	boolean infeasibleExists = false; //true iff at least an infeasible item is in the training set
     	
-    	//for every item in the training set, calculate the neighbor's similarity score and store it with the label
+    	//for every item in the training set, calculate the neighbor's similarity and store it with the label
     	final ArrayList<Neighbor> neighborRanking = new ArrayList<>();
     	
         for (TrainingItem item : this.trainingSet) {
@@ -67,52 +68,14 @@ final class ClassifierKNN {
         	
         	final BloomFilter itemBloomFilter = item.getBloomFilter();
         	
-        	final double similarity; 
-        	
         	final boolean itemLabel = item.getLabel(); //this item's label
         	
-        	/*
-        	 * if the item is feasible, we have a relation if
-        	 * the item contains the query's core, 
-        	 * otherwise if the query contains the item's last clause and eventually more clauses of the core
-        	 * 
-        	 * e.g. we have A && B && C && D feasible in the training set
-        	 * and our query is A && B && C, it's feasible for sure
-        	 * 
-        	 * e.g. we have A && B && C infeasible in the training set
-        	 * and our query is D && C, it could be infeasible because of C
-        	*/
-        	
-        	
-        	//we'll check if first contains second
+        	//check if first contains second
         	
         	final BloomFilter first = itemLabel ? itemBloomFilter : query;
         	final BloomFilter second = itemLabel ? query : itemBloomFilter; 
         	
-        	final double specificCoreSimilarity = first.coreSimilarity(second, true, itemLabel);
-        	final double generalCoreSimilarity = first.coreSimilarity(second, false, itemLabel);
-        	
-        	//consider the max similarity which can be the specific core similarity or the general core similarity
-        	
-        	final double maxCoreSimilarity = Math.max(specificCoreSimilarity, generalCoreSimilarity);
-        	
-        	if (!Util.doubleEquals(maxCoreSimilarity, 0.0d)) {
-        		//extract the ratio
-        		final double ratio;
-        		final double floor; //floor of the similarity, to which the weighted ratio and the weighted context similarity get added
-        		if (Util.doubleEquals(maxCoreSimilarity % 1, 0.0d)) { //the decimal part is 0.0d which means the ratio was 1.0d
-        			ratio = 1.0d;
-        			floor = Math.floor(maxCoreSimilarity - 1);
-        		} else {
-        			ratio = maxCoreSimilarity % 1; //modulo 1 to get the decimal part which is also the ratio here
-        			floor = Math.floor(maxCoreSimilarity);
-        		}
-        		//weight the ratio 80% and weight the context similarity 20%
-        		similarity = floor + (0.8d * ratio) + (0.2d * query.ctxJaccardSimilarity(itemBloomFilter));
-        	} else {
-        		//no relation, nothing to do
-        		similarity = 0.0d;
-        	}
+        	final Pair<Double, Double> similarity = first.calculateOtherSimilarity(second);
         	
         	neighborRanking.add(new Neighbor(similarity, itemLabel));
         }
@@ -125,9 +88,9 @@ final class ClassifierKNN {
         int countClassifyTrue = 0;
         for (int l = 0; l < this.k; ++l) {
             final boolean label = neighborRanking.get(l).label;
-            final double similarity = neighborRanking.get(l).similarity;
-            if (Util.doubleEquals(similarity, 0.0d)) {
-            	//optimization, since when a 0 is found then the remaining neighbors' similarities are 0 too (because of the descending order)
+            final Pair<Double, Double> similarity = neighborRanking.get(l).similarity;
+            if (Util.doubleEquals(similarity.first(), 0.0d)) { //there's no need to check for the context similarity too
+            	//optimization, since when an uncertain is found then the remaining neighbors are uncertain too (because of the descending order)
                 break;
             } else if (label) { 
                 ++countClassifyTrue;
@@ -197,9 +160,9 @@ final class ClassifierKNN {
 	}
 
     private static class Neighbor {
-    	private final double similarity;
+    	private final Pair<Double, Double> similarity; //<averageRatio, contextSimilarity>
     	private final boolean label;
-    	private Neighbor(double similarity, boolean label) {
+    	private Neighbor(Pair<Double, Double> similarity, boolean label) {
     		this.similarity = similarity;
     		this.label = label;
     	}
@@ -209,11 +172,16 @@ final class ClassifierKNN {
         @Override
         public int compare(Neighbor a, Neighbor b) {
         	
-        	boolean sameScore = Util.doubleEquals(a.similarity, b.similarity);
-        	
-        	//descending order
-        	return sameScore ? 0 : (a.similarity > b.similarity ? -1 : 1); 
+        	if (!Util.doubleEquals(a.similarity.first(), b.similarity.first())) { //averageRatio isn't the same
+        		//descending order
+        		return a.similarity.first() > b.similarity.first() ? -1 : 1;
+        	} else {
+        		//averageRatio is the same, use the context Jaccard similarity coefficient (descending order again)
+        		return Util.doubleEquals(a.similarity.second(), b.similarity.second()) ? 0 
+        				: (a.similarity.second() > b.similarity.second() ? -1 : 1);
+        	}
         }
+        
     }
     
     static class ClassificationResult {
