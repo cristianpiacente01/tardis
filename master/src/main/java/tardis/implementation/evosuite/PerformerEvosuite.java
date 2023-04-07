@@ -10,15 +10,18 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +61,7 @@ import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.common.NoJavaCompilerException;
+import tardis.implementation.common.Util;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
 
@@ -82,6 +86,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     private final String classpathCompilationWrapper;
     private int testCount;
     private volatile boolean stopForSeeding;
+    
+    private static final List<EvosuiteProcessReport> evosuiteReport = new ArrayList<>(); //new
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
@@ -186,7 +192,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     private void generateTestsAndScheduleJBSESeedTargetIsASetOfMethods(int testCountInitial, List<JBSEResult> items) {
     	//updates testCount
     	this.testCount += items.size();
-
+    	
     	//builds the EvoSuite wrappers
     	int testCount = testCountInitial;
     	for (JBSEResult item : items) {
@@ -425,6 +431,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         if (items.size() % this.o.getNumTargetsEvosuitePerJob() != 0) {
         	splitItems.add(items.subList((items.size() / this.o.getNumTargetsEvosuitePerJob()) * items.size(), items.size()));
         }
+        
+        final Map<Integer, Pair<Process, Thread>> testCountMap = new HashMap<>();
 
         //launches an EvoSuite process for each sublist
         final ArrayList<TestDetector> testDetectors = new ArrayList<>();
@@ -434,6 +442,9 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         for (List<JBSEResult> subItems : splitItems) {
             final int testCount = testCountStart; //copy into final variable to keep compiler happy
             testCountStart += subItems.size(); //for the next iteration
+            
+            final EvosuiteProcessReport currentReport = new EvosuiteProcessReport(testCount, subItems);
+            //LOGGER.info("[generateTestsAndScheduleJBSE] Created a report for test count = %d", testCount);
 
             //generates and compiles the wrappers
             final ArrayList<JBSEResult> compiled = new ArrayList<>();
@@ -442,6 +453,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
                 try {
                     emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getPostFrontierState(), item.getStringLiterals(), item.getStringOthers(), item.getForbiddenExpansions());
                     compiled.add(item);
+                    currentReport.wrapperNames.add("EvoSuiteWrapper_" + i + ".java");
+                    //LOGGER.info("[generateTestsAndScheduleJBSE] Added EvoSuiteWrapper_%d.java to the report with test count = %d", i, testCount);
                 } catch (CompilationFailedWrapperException e) {
                     LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
                     //falls through
@@ -479,6 +492,9 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             try {
                 evosuiteProcess = launchProcess(evosuiteCommand);
                 processes.add(evosuiteProcess);
+                currentReport.creationTimestamp = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date());
+                evosuiteReport.add(currentReport);
+                //LOGGER.info("[generateTestsAndScheduleJBSE] Added the report with test count = %d to the evosuiteReport List", testCount);
                 LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while running EvoSuite process");
@@ -498,6 +514,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
                 tJBSE.start();
                 testDetectors.add(tdJBSE);
                 threads.add(tJBSE);
+                testCountMap.put(testCount, new Pair<>(evosuiteProcess, tJBSE));
+                //LOGGER.info("[generateTestsAndScheduleJBSE] Associated a process and a thread with test count = %d", testCount);
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while opening the EvoSuite output file");
                 LOGGER.error("Message: %s", e.toString());
@@ -523,6 +541,25 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             } catch (InterruptedException e) {
                 interrupted = true;
                 thread.interrupt();
+            } finally {
+            	for (Map.Entry<Integer, Pair<Process, Thread>> entry : testCountMap.entrySet()) {
+                	if (entry.getValue().second().equals(thread)) {
+                		final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByTestCount(entry.getKey());
+                		assert(report != null);
+                		report.terminationTimestamp = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date());
+                		//got a complete EvosuiteProcessReport!
+                		try {
+							this.saveEvosuiteProcessReportToFile(report);
+						} catch (IOFileCreationException e) {
+							LOGGER.error("Unexpected I/O error while saving a report to file!");
+				            LOGGER.error("Message: %s", e.toString());
+				            LOGGER.error("Stack trace:");
+				            for (StackTraceElement elem : e.getStackTrace()) {
+				                LOGGER.error("%s", elem.toString());
+				            }
+						}
+                	}
+                }
             }
         }
         
@@ -537,6 +574,27 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             } catch (InterruptedException e) {
                 interrupted = true;
                 process.destroy();
+            } finally {
+            	for (Map.Entry<Integer, Pair<Process, Thread>> entry : testCountMap.entrySet()) {
+                	if (entry.getValue().first().equals(process)) {
+                		final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByTestCount(entry.getKey());
+                		if (report != null && report.terminationTimestamp == null) { 
+                			//if it still exists (saving to file removes it from the List) and it wasn't already set above
+                			report.terminationTimestamp = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date());
+                    		//got a complete EvosuiteProcessReport!
+                			try {
+    							this.saveEvosuiteProcessReportToFile(report);
+    						} catch (IOFileCreationException e) {
+    							LOGGER.error("Unexpected I/O error while saving a report to file!");
+    				            LOGGER.error("Message: %s", e.toString());
+    				            LOGGER.error("Stack trace:");
+    				            for (StackTraceElement elem : e.getStackTrace()) {
+    				                LOGGER.error("%s", elem.toString());
+    				            }
+    						}
+                		}
+                	}
+                }
             }
         }
     }
@@ -858,6 +916,12 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
+            if (testCount != 0) { //not seed
+            	final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByWrapperTestCount(testCount);
+            	assert(report != null);
+	            report.testCasesNames.add(testCaseClassName + ".java");
+	            //LOGGER.info("[checkTestCompileAndScheduleJBSE] Added the test case name = %s to the report with test count = %d", testCaseClassName + ".java", testCount);
+            }
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
@@ -866,4 +930,146 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             throw new ClassFileAccessException(e, testCaseClassName);
         }
     }
+    
+    //class representing an evosuite report, used for the evosuiteReport List
+    
+    static class EvosuiteProcessReport {
+    	private final int testCount; //identifier for an instance of this class
+    	
+    	private String creationTimestamp; //formatted string containing the timestamp when the process was created
+    	private String terminationTimestamp; //when the process terminated
+    		
+    	private final List<JBSEResult> items; //path conditions (the classification labels aren't stored here and the ground truth doesn't need to be stored)
+    	private final List<String> wrapperNames = new ArrayList<>(); //wrappers associated with each JBSEResult
+    		
+    	private final List<String> testCasesNames = new ArrayList<>(); //tests which were produced by this process
+    		
+    	private final List<String> wrappersWhichFailed = new ArrayList<>(); //a sub-list of wrapperNames, which correspond to the wrappers that failed
+    	
+    	private EvosuiteProcessReport(int testCount, List<JBSEResult> itemsList) {
+    		this.testCount = testCount;
+    		this.items = new ArrayList<>(itemsList);
+    	}
+    	
+    	//method used out of the PerformerEvosuite class
+    	
+    	public synchronized void addFailedWrapperName(String name) {
+    		assert(this.wrapperNames.contains(name));
+    		this.wrappersWhichFailed.add(name);
+    	}
+    	
+    	//toString, must be invoked after everything was set or it's useless
+    	
+    	@Override
+    	public String toString() {
+    		String retVal = "";
+    		retVal += "*** EVOSUITE PROCESS CUSTOM REPORT, test count = " + this.testCount + " ***\n\n\n";
+    		retVal += "CREATION: " + this.creationTimestamp + "\n\n\n";
+    		retVal += "TERMINATION: " + this.terminationTimestamp + "\n\n\n";
+    		retVal += "PATH CONDITIONS (" + this.items.size() + ") + CLASSIFICATION LABELS + GROUND TRUTH + WRAPPERS:";
+    		for (int i = 0; i < this.items.size(); ++i) {
+    			final JBSEResult item = this.items.get(i);
+    			
+    			final String pathString = Util.stringifyPostFrontierPathCondition(item.getPathConditionGenerated());
+    			
+    			final String classificationLabel = JBSEResultInputOutputBuffer.UtilClassificationLabels.getLabel(item.getPathConditionGenerated());
+    			//the classification label is UNKNOWN/FEASIBLE/INFEASIBLE
+    			
+    			JBSEResultInputOutputBuffer.UtilClassificationLabels.removePathCondition(pathString); //I don't need it anymore
+    			
+    			final boolean groundTruth = Util.calculateGroundTruth(pathString); //true/false which means feasible/infeasible
+    			
+    			retVal += "\n\n";
+    			retVal += "\tPC = " + pathString + "\n";
+    			retVal += "\tLABEL = " + classificationLabel + "\n";
+    			retVal += "\tGROUND TRUTH = " + groundTruth + "\n";
+    			retVal += "\tWRAPPER = " + this.wrapperNames.get(i);
+    		}
+    		retVal += "\n\n\n";
+    		retVal += "TEST CASES (" + this.testCasesNames.size() + "):";
+    		for (String name : this.testCasesNames) {
+    			retVal += "\n";
+    			retVal += name;
+    		}
+    		retVal += "\n\n\n";
+    		retVal += "WRAPPERS WHICH FAILED (" + this.wrappersWhichFailed.size() + "):";
+    		for (String name : this.wrappersWhichFailed) {
+    			retVal += "\n";
+    			retVal += name;
+    		}
+    		retVal += "\n\n\n*** ***";
+    		return retVal;
+    	}
+    	
+    	//hashCode and equals
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + testCount;
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (getClass() != obj.getClass())
+				return false;
+			final EvosuiteProcessReport other = (EvosuiteProcessReport) obj;
+			if (testCount != other.testCount)
+				return false;
+			return true;
+		}
+    	
+    }
+    
+    //save an EvosuiteProcessReport to file, it can't be static because it uses the current configuration (tmp directory)
+    
+    private void saveEvosuiteProcessReportToFile(EvosuiteProcessReport instance) throws IOFileCreationException {
+    	final Path filePath = this.o.getTmpDirectoryPath().resolve("CUSTOM-evosuite-report-" + instance.testCount + ".txt");
+        try (final PrintStream printStream = new PrintStream(Files.newOutputStream(filePath))) {
+        	printStream.print(instance.toString());
+        	printStream.flush();
+        	//close is called automatically
+        	LOGGER.info("[saveEvosuiteProcessReportToFile] Saved a report to file! File path: %s", filePath.toString());
+        	synchronized (PerformerEvosuite.evosuiteReport) {
+        		PerformerEvosuite.evosuiteReport.remove(instance);
+        	}
+        	
+        } catch (IOException e) {
+            throw new IOFileCreationException(e, filePath);
+        }
+    }
+    
+    //methods to get an EvosuiteProcessReport from its test count or a wrapper's test count
+    
+    public final static class UtilEvosuiteReport {
+    	public static EvosuiteProcessReport getProcessReportByTestCount(int testCount) {
+    		synchronized (PerformerEvosuite.evosuiteReport) {
+    			for (EvosuiteProcessReport processReport : PerformerEvosuite.evosuiteReport) {
+	        		if (processReport.testCount == testCount) {
+	        			return processReport;
+	        		}
+	        	}
+	        	return null;
+    		}
+        }
+    	
+    	public static EvosuiteProcessReport getProcessReportByWrapperTestCount(int testCount) {
+    		synchronized (PerformerEvosuite.evosuiteReport) {
+    			for (EvosuiteProcessReport processReport : PerformerEvosuite.evosuiteReport) {
+    				for (String name : processReport.wrapperNames) {
+    					if (name.equals("EvoSuiteWrapper_" + testCount + ".java")) {
+    						assert(!processReport.wrappersWhichFailed.contains(name));
+    						return processReport;
+    					}
+    				}
+	        	}
+	        	return null;
+    		}
+        }
+    }
+    
+    
+    
 }

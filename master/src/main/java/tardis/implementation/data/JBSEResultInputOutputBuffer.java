@@ -190,6 +190,8 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     private int trainingSetSize = 0;
     
+    private static final Map<String, Boolean> classificationLabels = new HashMap<>(); //new
+    
     public JBSEResultInputOutputBuffer(Options o, TreePath treePath) {
     	this.useIndexImprovability = o.getUseIndexImprovability();
     	this.useIndexNovelty = o.getUseIndexNovelty();
@@ -593,6 +595,13 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final boolean feasible = result.getLabel();
         final int voting = result.getVoting();
         
+        if (!reclassifying && !unknown) { //first time classifying this path and not unknown, since unknown classifications aren't stored
+        	final boolean labelWasSet = UtilClassificationLabels.setClassificationLabel(path, feasible);
+        	assert(labelWasSet);
+        	/*LOGGER.info("[updateIndexInfeasibility] Changed the classification label of a possible report to %b, PC = %s", feasible,
+        			stringifyPostFrontierPathCondition(path));*/
+        }
+        
         final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - JBSEResultInputOutputBuffer.K / 2;
     	//how many possible voting values there are,
     	//which go from floor(K/2)+1 to K,
@@ -630,7 +639,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         //to avoid having wrong probabilities when choosing unused queues
         //e.g. if we have K = 1 and 4 queues then offset = 2, so the first two queues aren't used
         
-        LOGGER.info("[updateIndexInfeasibility] Got offset = %d", offset);
+        //LOGGER.info("[updateIndexInfeasibility] Got offset = %d", offset);
         
         final int newQueueRankingLength = this.queueRanking.length - offset; 
         //length of the sub-array which is actually used, which starts from queueRanking[offset] and ends like queueRanking
@@ -663,11 +672,11 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         		LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value, so newValue = 0");
         		newValue = 0;
         	} else {
-        		LOGGER.info("[updateIndexInfeasibility] There are %d possible queues", numberOfPossibleQueues);
+        		//LOGGER.info("[updateIndexInfeasibility] There are %d possible queues", numberOfPossibleQueues);
     			
-            	LOGGER.info("[updateIndexInfeasibility] Number of possible values for voting: %d", numberOfPossibleVoting);
+            	//LOGGER.info("[updateIndexInfeasibility] Number of possible values for voting: %d", numberOfPossibleVoting);
             	
-        		LOGGER.info("[updateIndexInfeasibility] Applying a linear transformation");
+        		//LOGGER.info("[updateIndexInfeasibility] Applying a linear transformation");
                 //linear transformation, rounding to the closest int
                 				
                 final int oldValue = voting;
@@ -694,8 +703,8 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                 newValue = Math.abs((int) Math.round((oldValue - oldBottom) / (1.0d * oldTop - oldBottom) * (newTop - newBottom) + newBottom));
                 //using the abs. value as described above
                 
-                LOGGER.info("[updateIndexInfeasibility] Transformed voting = %d in [%d, %d] to a new value = %d which is the abs. value of a number in [%d, 0]",
-                		voting, oldBottom, oldTop, newValue, newBottom);
+                /*LOGGER.info("[updateIndexInfeasibility] Transformed voting = %d in [%d, %d] to a new value = %d which is the abs. value of a number in [%d, 0]",
+                		voting, oldBottom, oldTop, newValue, newBottom);*/
         	}
             		
             LOGGER.info("[updateIndexInfeasibility] Going %s from the %s position %d times", 
@@ -705,7 +714,6 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             		: this.queueRanking[offset + newValue]; //if feasible, 0 + offset + newValue is used
         }
         
-        //TODO remove this log
         LOGGER.info("Got index infeasibility = %d", indexInfeasibility);
         
         if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
@@ -748,6 +756,44 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                 toDo.accept(queue, bufferedJBSEResult);
             }
         });
+    }
+    
+    //a few methods to manage the classificationLabels Map
+    
+    public final static class UtilClassificationLabels {
+    	public static String getLabel(List<Clause> path) {
+    		final String pathCondition = stringifyPostFrontierPathCondition(path);
+    		synchronized (JBSEResultInputOutputBuffer.classificationLabels) {
+    			if (!JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
+    				return "UNKNOWN";
+    			} else {
+    				if (JBSEResultInputOutputBuffer.classificationLabels.get(pathCondition)) {
+    					return "FEASIBLE";
+    				} else { //false
+    					return "INFEASIBLE";
+    				}
+    			}
+    		}
+    	}
+    	
+    	public static boolean setClassificationLabel(List<Clause> path, boolean label) {
+    		final String pathCondition = stringifyPostFrontierPathCondition(path);
+    		synchronized (JBSEResultInputOutputBuffer.classificationLabels) {
+    			if (JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
+    				//something went wrong because it already exists
+    				return false;
+    			}
+    			JBSEResultInputOutputBuffer.classificationLabels.put(pathCondition, label);
+    			return true;
+    		}
+    	}
+    	
+    	public static void removePathCondition(String pathCondition) {
+    		synchronized (JBSEResultInputOutputBuffer.classificationLabels) {
+    			JBSEResultInputOutputBuffer.classificationLabels.remove(pathCondition);
+    		}
+    	}
+    	
     }
 }
 

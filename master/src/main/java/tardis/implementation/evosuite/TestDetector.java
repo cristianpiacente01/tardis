@@ -21,6 +21,8 @@ import org.apache.logging.log4j.Logger;
 import tardis.Options;
 import tardis.implementation.common.Util;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
+import tardis.implementation.evosuite.PerformerEvosuite.EvosuiteProcessReport;
+import tardis.implementation.evosuite.PerformerEvosuite.UtilEvosuiteReport;
 import tardis.implementation.jbse.JBSEResult;
 
 /**
@@ -160,6 +162,13 @@ final class TestDetector implements Runnable {
             if (!generated.contains(testCount)) {
                 //logs the items whose test cases were not generated
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
+                
+                if (this.testCountInitial != 0) {
+                	final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByTestCount(this.testCountInitial);
+                	assert(report != null);
+                	report.addFailedWrapperName("EvoSuiteWrapper_" + testCount + ".java");
+                	//LOGGER.info("[run] EvoSuiteWrapper_%d.java failed, associated with test count initial = %d", testCount, this.testCountInitial);
+                }
                 
                 TestDetector.groundTruthingEvosuiteFail(item);
                 
