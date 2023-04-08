@@ -499,7 +499,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
                 currentReport.creationTimestamp = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date());
                 //assert(PerformerEvosuite.evosuiteReport.containsKey(testCount)); 
                 //I don't need to put testCount, since the first wrapper has the same test count
-                //LOGGER.info("[generateTestsAndScheduleJBSE] Added the report with test count = %d to the evosuiteReport List", testCount);
+                //LOGGER.info("[generateTestsAndScheduleJBSE] Added the report with test count = %d to the evosuiteReport Map", testCount);
                 LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while running EvoSuite process");
@@ -936,7 +936,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         }
     }
     
-    //class representing an evosuite report, used for the evosuiteReport List
+    //class representing an evosuite report, used for the evosuiteReport Map
     
     static class EvosuiteProcessReport {
     	private final int testCount; //identifier for an instance of this class
