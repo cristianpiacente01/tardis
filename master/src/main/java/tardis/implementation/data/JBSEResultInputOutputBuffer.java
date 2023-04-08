@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -190,7 +191,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     private int trainingSetSize = 0;
     
-    private static final Map<String, Boolean> classificationLabels = new HashMap<>(); //new
+    private static final ConcurrentHashMap<String, Boolean> classificationLabels = new ConcurrentHashMap<>(); //new, thread-safe
     
     public JBSEResultInputOutputBuffer(Options o, TreePath treePath) {
     	this.useIndexImprovability = o.getUseIndexImprovability();
@@ -596,8 +597,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final int voting = result.getVoting();
         
         if (!reclassifying && !unknown) { //first time classifying this path and not unknown, since unknown classifications aren't stored
-        	final boolean labelWasSet = UtilClassificationLabels.setClassificationLabel(path, feasible);
-        	assert(labelWasSet);
+        	UtilClassificationLabels.setClassificationLabel(path, feasible);
         	/*LOGGER.info("[updateIndexInfeasibility] Changed the classification label of a possible report to %b, PC = %s", feasible,
         			stringifyPostFrontierPathCondition(path));*/
         }
@@ -763,35 +763,25 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     public final static class UtilClassificationLabels {
     	public static String getLabel(List<Clause> path) {
     		final String pathCondition = stringifyPostFrontierPathCondition(path);
-    		synchronized (JBSEResultInputOutputBuffer.classificationLabels) {
-    			if (!JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
-    				return "UNKNOWN";
-    			} else {
-    				if (JBSEResultInputOutputBuffer.classificationLabels.get(pathCondition)) {
-    					return "FEASIBLE";
-    				} else { //false
-    					return "INFEASIBLE";
-    				}
-    			}
+    		if (!JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
+    			return "UNKNOWN";
+    		} else {
+    			return JBSEResultInputOutputBuffer.classificationLabels.get(pathCondition) ? "FEASIBLE" : "INFEASIBLE";
     		}
     	}
     	
     	public static boolean setClassificationLabel(List<Clause> path, boolean label) {
     		final String pathCondition = stringifyPostFrontierPathCondition(path);
-    		synchronized (JBSEResultInputOutputBuffer.classificationLabels) {
-    			if (JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
-    				//something went wrong because it already exists
-    				return false;
-    			}
-    			JBSEResultInputOutputBuffer.classificationLabels.put(pathCondition, label);
-    			return true;
+    		if (JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
+    			//something went wrong because it already exists
+    			return false;
     		}
+    		JBSEResultInputOutputBuffer.classificationLabels.put(pathCondition, label);
+    		return true;
     	}
     	
     	public static void removePathCondition(String pathCondition) {
-    		synchronized (JBSEResultInputOutputBuffer.classificationLabels) {
-    			JBSEResultInputOutputBuffer.classificationLabels.remove(pathCondition);
-    		}
+    		JBSEResultInputOutputBuffer.classificationLabels.remove(pathCondition);
     	}
     	
     }

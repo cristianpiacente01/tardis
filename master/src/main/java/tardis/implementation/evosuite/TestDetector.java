@@ -164,8 +164,9 @@ final class TestDetector implements Runnable {
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
                 
                 if (this.testCountInitial != 0) {
-                	final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByTestCount(this.testCountInitial);
-                	assert(report != null);
+                	final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByATestCount(this.testCountInitial); 
+                	//initial test count is used here, I could've used testCount too
+                	//assert(report != null);
                 	report.addFailedWrapperName("EvoSuiteWrapper_" + testCount + ".java");
                 	//LOGGER.info("[run] EvoSuiteWrapper_%d.java failed, associated with test count initial = %d", testCount, this.testCountInitial);
                 }
