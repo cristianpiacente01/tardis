@@ -26,6 +26,7 @@ import jbse.mem.Clause;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
+import tardis.implementation.common.Util;
 import tardis.implementation.data.ClassifierKNN.ClassificationResult;
 import tardis.implementation.jbse.JBSEResult;
 
@@ -243,8 +244,11 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         //assert (0 < j && j <= INDEX_VALUES.length)
         
         //TODO remove this if, it's for testing purposes with K = 1
-        if (this.useIndexInfeasibility && (this.queues.get(1).size() != 0 || this.queues.get(0).size() != 0)) {
-        	LOGGER.info("There are %d items in the FEASIBLE queue and %d items in the INFEASIBLE queue", this.queues.get(1).size(), this.queues.get(0).size());
+        
+        synchronized (this) {
+        	if (this.useIndexInfeasibility && (this.queues.get(1).size() != 0 || this.queues.get(0).size() != 0)) {
+            	LOGGER.debug("There are %d items in the FEASIBLE queue and %d items in the INFEASIBLE queue", this.queues.get(1).size(), this.queues.get(0).size());
+            }
         }
 
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
@@ -258,6 +262,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         			if (queue.isEmpty()) {
         				continue;
         			} else {
+        				LOGGER.debug("Got an item from queue %d", this.queueRanking[i]);
         				item = queue.poll(0, timeoutTimeUnit); //nothing to wait
         				break;
         			}
@@ -271,6 +276,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         				if (queue.isEmpty()) {
         					continue;
         				} else {
+        					LOGGER.debug("Second chance, got an item from queue %d", this.queueRanking[i]);
         					item = queue.poll(0, timeoutTimeUnit); //nothing to wait
         					break;
         				}
@@ -719,7 +725,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             		: this.queueRanking[offset + newValue]; //if feasible, 0 + offset + newValue is used
         }
         
-        LOGGER.debug("Got index infeasibility = %d", indexInfeasibility);
+        LOGGER.debug("Got index infeasibility = %d, PC = %s", indexInfeasibility, Util.stringifyPostFrontierPathCondition(path));
         
         if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
