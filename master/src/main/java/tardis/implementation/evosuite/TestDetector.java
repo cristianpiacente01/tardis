@@ -197,7 +197,7 @@ final class TestDetector implements Runnable {
 		//I can't extract the core in this class so I'll just pass the whole PC string to the method calculateGroundTruth...
 		
 		if (groundTruth) { //groundTruth != false, so it's true but Evosuite failed to generate a test case
-			LOGGER.warn("GROUND TRUTH = true, but Evosuite FAILED to generate a test case, PC = %s", stringifyPostFrontierPathCondition(item));
+			LOGGER.debug("GROUND TRUTH = true, but Evosuite FAILED to generate a test case, PC = %s", stringifyPostFrontierPathCondition(item));
 			correctEvosuiteFails = TestDetector.correctEvosuiteFails.get();
 		} else {
 			correctEvosuiteFails = TestDetector.correctEvosuiteFails.incrementAndGet();

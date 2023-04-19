@@ -241,6 +241,11 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         } while (sum < randomValue && j < this.queueRanking.length);
         
         //assert (0 < j && j <= INDEX_VALUES.length)
+        
+        //TODO remove this if, it's for testing purposes with K = 1
+        if (this.useIndexInfeasibility && (this.queues.get(1).size() != 0 || this.queues.get(0).size() != 0)) {
+        	LOGGER.info("There are %d items in the FEASIBLE queue and %d items in the INFEASIBLE queue", this.queues.get(1).size(), this.queues.get(0).size());
+        }
 
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
         for (int k = 1; k <= n; ++k) {
@@ -647,7 +652,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final int indexInfeasibility;
         if (unknown) {
         	//max priority
-        	LOGGER.info("[updateIndexInfeasibility] The result is unknown, so the queue is the one with max priority, at index offset = %d", offset);
+        	LOGGER.debug("[updateIndexInfeasibility] The result is unknown, so the queue is the one with max priority, at index offset = %d", offset);
         	indexInfeasibility = this.queueRanking[offset];
         } else {
         	//voting <= K
@@ -669,7 +674,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         	//if feasible, how many positions to go forward (from the first position, which is 0 + offset)
         	
         	if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) {
-        		LOGGER.info("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value, so newValue = 0");
+        		LOGGER.debug("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value, so newValue = 0");
         		newValue = 0;
         	} else {
         		//LOGGER.info("[updateIndexInfeasibility] There are %d possible queues", numberOfPossibleQueues);
@@ -707,14 +712,14 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                 		voting, oldBottom, oldTop, newValue, newBottom);*/
         	}
             		
-            LOGGER.info("[updateIndexInfeasibility] Going %s from the %s position %d times", 
+            LOGGER.debug("[updateIndexInfeasibility] Going %s from the %s position %d times", 
             		!feasible ? "back" : "forward", !feasible ? "last" : "first (0 + offset)", newValue);
             
             indexInfeasibility = !feasible ? this.queueRanking[this.queueRanking.length - 1 - newValue]
             		: this.queueRanking[offset + newValue]; //if feasible, 0 + offset + newValue is used
         }
         
-        LOGGER.info("Got index infeasibility = %d", indexInfeasibility);
+        LOGGER.debug("Got index infeasibility = %d", indexInfeasibility);
         
         if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);

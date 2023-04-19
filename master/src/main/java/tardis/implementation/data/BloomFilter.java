@@ -3,6 +3,10 @@ package tardis.implementation.data;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+
 import jbse.mem.Clause;
 import tardis.implementation.evosuite.Pair;
 
@@ -30,12 +34,12 @@ final class BloomFilter {
     /** Bloom filters where each one singularly represents a clause of the core */
     private final List<BloomFilter> coreBloomFilters = new ArrayList<>();
     
-    /* TODO: remove the arrays of String below, they're still here only for logging purposes */
+    /* The arrays of String below are filled only if the logger's level is DEBUG, otherwise they're empty arrays (length 0) */
     
-    /** The specific context string array, TODO remove this */
+    /** The specific context string array (empty if the logger's level isn't debug) */
     private String[] specificContextStrArray;
     
-    /** The specific infeasibility core string array, TODO remove this */
+    /** The specific infeasibility core string array (empty if the logger's level isn't debug) */
     private String[] specificInfeasibilityCoreStrArray;
 
 
@@ -43,14 +47,24 @@ final class BloomFilter {
         final String[][] outputSliced = SlicingManager.slice(path);
         
         final String[] specificInfeasibilityCore = outputSliced[0];
-        this.specificInfeasibilityCoreStrArray = specificInfeasibilityCore; //TODO remove this
+        
         
         final String[] generalInfeasibilityCore = outputSliced[1];
         
         final String[] specificContext = outputSliced[2];
-        this.specificContextStrArray = specificContext; //TODO remove this
+        
         
         final String[] generalContext = outputSliced[3];
+        
+        if (LogManager.getFormatterLogger(BloomFilter.class).getLevel().isInRange(Level.DEBUG, Level.ALL)) {
+        	//if the logger's level is DEBUG or TRACE or ALL then set the arrays
+        	this.specificInfeasibilityCoreStrArray = specificInfeasibilityCore;
+        	this.specificContextStrArray = specificContext;
+        } else {
+        	//otherwise to avoid null default values set them to empty arrays (length 0)
+        	this.specificInfeasibilityCoreStrArray = new String[0];
+        	this.specificContextStrArray = new String[0];
+        }
         
         fillBloomFilterStructure(specificContext, generalContext, specificInfeasibilityCore, generalInfeasibilityCore);
     }
@@ -82,7 +96,10 @@ final class BloomFilter {
         	//empty, there's no recursion because with an empty List of clauses we have specificInfeasibilityCore.length = 0,
         	//so this loop is never executed when creating tmp
         	
-        	tmp.specificInfeasibilityCoreStrArray = new String[] {specificInfeasibilityCore[i]}; //TODO remove this
+        	if (LogManager.getFormatterLogger(BloomFilter.class).getLevel().isInRange(Level.DEBUG, Level.ALL)) {
+        		tmp.specificInfeasibilityCoreStrArray = new String[] {specificInfeasibilityCore[i]};
+        	} 
+        	//the else branch isn't needed, tmp.specificInfeasibilityCoreStrArray is already not null and an empty array (length 0)
         	
             //apply different hash functions for each clause
             for (int j = 0; j < PRIME_NUMBERS.length; ++j) {
@@ -221,7 +238,6 @@ final class BloomFilter {
 		return true;
 	}
 
-	//TODO remove this, it's only used for logging purposes
     public String getSpecificContextString() {
     	String retVal = "";
     	for (String str : specificContextStrArray) {
@@ -235,7 +251,6 @@ final class BloomFilter {
     	return retVal;
     }
     
-    //TODO remove this, it's only used for logging purposes
 	public String getSpecificCoreString() {
     	String retVal = "";
     	for (String str : specificInfeasibilityCoreStrArray) {

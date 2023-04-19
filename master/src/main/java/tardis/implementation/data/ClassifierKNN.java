@@ -43,13 +43,13 @@ final class ClassifierKNN {
     }
 
     public ClassificationResult classify(BloomFilter query, boolean reclassifying) { //the second parameter is for logging purposes
-    	LOGGER.info("[classify] Classifying query with\n"
+    	LOGGER.debug("[classify] Classifying query with\n"
     			+ "\t\t specific context: %s\n"
     			+ "\t\t specific core: %s", 
     			query.getSpecificContextString(), query.getSpecificCoreString());
     			
     	if (this.trainingSet.size() < k) {
-    		LOGGER.info("[classify] The query was classified as UNKNOWN because trainingSet.size() is too small");
+    		LOGGER.debug("[classify] The query was classified as UNKNOWN because trainingSet.size() is too small");
     		final ClassificationResult trainingSetTooSmallOutput = ClassificationResult.unknown();
     		return trainingSetTooSmallOutput;
     	}
@@ -101,23 +101,23 @@ final class ClassifierKNN {
         
         final int countUncertain = this.k - countClassifyTrue - countClassifyFalse; //optimization, this is now a final variable
         
-        LOGGER.info("[classify] countUncertain = %d, countClassifyFalse = %d, countClassifyTrue = %d", countUncertain, countClassifyFalse, countClassifyTrue);
+        LOGGER.debug("[classify] countUncertain = %d, countClassifyFalse = %d, countClassifyTrue = %d", countUncertain, countClassifyFalse, countClassifyTrue);
 
         //builds the output
         final ClassificationResult output;
         
         if ((countUncertain >= countClassifyFalse && countUncertain >= countClassifyTrue) || countClassifyFalse == countClassifyTrue) {
         	//too many uncertains, or tie between 0 and 1 classification
-        	LOGGER.info("[classify] The query was classified as UNKNOWN because there are too many uncertains or there's a tie between false and true");
+        	LOGGER.debug("[classify] The query was classified as UNKNOWN because there are too many uncertains or there's a tie between false and true");
         	output = ClassificationResult.unknown();
         } else if (countClassifyTrue > countClassifyFalse && (countUncertain + countClassifyFalse < countClassifyTrue)) {
-        	LOGGER.info("[classify] The query was classified as FEASIBLE");
+        	LOGGER.debug("[classify] The query was classified as FEASIBLE");
         	output = ClassificationResult.of(true, countClassifyTrue);
         } else if (countClassifyFalse > countClassifyTrue && (countUncertain + countClassifyTrue < countClassifyFalse)) {
-        	LOGGER.info("[classify] The query was classified as INFEASIBLE");
+        	LOGGER.debug("[classify] The query was classified as INFEASIBLE");
         	output = ClassificationResult.of(false, countClassifyFalse);
         } else { //e.g. K = 10 but countUncertain = 2 and countClassifyFalse = 3 so countClassifyTrue = 5 but it would make sense if this was > 5
-        	LOGGER.info("[classify] The query was classified as UNKNOWN because the uncertains + the lowest counter isn't less than the highest one");
+        	LOGGER.debug("[classify] The query was classified as UNKNOWN because the uncertains + the lowest counter isn't less than the highest one");
         	output = ClassificationResult.unknown();
         }
         
@@ -152,7 +152,7 @@ final class ClassifierKNN {
 		    
 		if (output.getLabel() != groundTruth) {
 		    //classification != ground truth
-		    LOGGER.warn("[reclassifying = %b] GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", reclassifying,
+		    LOGGER.debug("[reclassifying = %b] GROUND TRUTH = %b, but the query was classified with LABEL = %b, PC = %s", reclassifying,
 		    		groundTruth, output.getLabel(), pathCondition);
 		    correctClassifications = ClassifierKNN.correctClassifications.get();
 		} else {
