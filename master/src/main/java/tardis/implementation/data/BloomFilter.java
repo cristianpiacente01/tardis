@@ -34,12 +34,12 @@ final class BloomFilter {
     /** Bloom filters where each one singularly represents a clause of the core */
     private final List<BloomFilter> coreBloomFilters = new ArrayList<>();
     
-    /* The arrays of String below are filled only if the logger's level is DEBUG, otherwise they're empty arrays (length 0) */
+    /* The arrays of String below are filled only if the logger's level is at least DEBUG, otherwise they're empty arrays (length 0) */
     
-    /** The specific context string array (empty if the logger's level isn't debug) */
+    /** The specific context string array (empty if the logger's level isn't at least debug) */
     private String[] specificContextStrArray;
     
-    /** The specific infeasibility core string array (empty if the logger's level isn't debug) */
+    /** The specific infeasibility core string array (empty if the logger's level isn't at least debug) */
     private String[] specificInfeasibilityCoreStrArray;
 
 
