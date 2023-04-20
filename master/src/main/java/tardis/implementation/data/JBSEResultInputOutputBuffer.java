@@ -244,7 +244,6 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         //assert (0 < j && j <= INDEX_VALUES.length)
         
         //TODO remove this if, it's for testing purposes with K = 1
-        
         synchronized (this) {
         	if (this.useIndexInfeasibility && (this.queues.get(1).size() != 0 || this.queues.get(0).size() != 0)) {
             	LOGGER.debug("There are %d items in the FEASIBLE queue and %d items in the INFEASIBLE queue", this.queues.get(1).size(), this.queues.get(0).size());
@@ -262,8 +261,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         			if (queue.isEmpty()) {
         				continue;
         			} else {
-        				LOGGER.debug("Got an item from queue %d", this.queueRanking[i]);
         				item = queue.poll(0, timeoutTimeUnit); //nothing to wait
+        				if (item != null) {
+        					LOGGER.debug("Got an item from queue %d", this.queueRanking[i]);
+        				}
         				break;
         			}
         		}
@@ -276,8 +277,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         				if (queue.isEmpty()) {
         					continue;
         				} else {
-        					LOGGER.debug("Second chance, got an item from queue %d", this.queueRanking[i]);
         					item = queue.poll(0, timeoutTimeUnit); //nothing to wait
+        					if (item != null) {
+        						LOGGER.debug("Second chance, got an item from queue %d", this.queueRanking[i]);
+        					}
         					break;
         				}
         			}
@@ -725,7 +728,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             		: this.queueRanking[offset + newValue]; //if feasible, 0 + offset + newValue is used
         }
         
-        LOGGER.debug("Got index infeasibility = %d, PC = %s", indexInfeasibility, Util.stringifyPostFrontierPathCondition(path));
+        LOGGER.debug("Got index infeasibility = %d", indexInfeasibility);
         
         if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
