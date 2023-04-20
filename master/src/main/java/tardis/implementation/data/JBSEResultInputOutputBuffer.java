@@ -26,7 +26,6 @@ import jbse.mem.Clause;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
-import tardis.implementation.common.Util;
 import tardis.implementation.data.ClassifierKNN.ClassificationResult;
 import tardis.implementation.jbse.JBSEResult;
 
