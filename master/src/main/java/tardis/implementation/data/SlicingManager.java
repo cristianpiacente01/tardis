@@ -4,6 +4,7 @@ import static tardis.implementation.common.Util.shorten;
 import static tardis.implementation.common.Util.stringifyTestPathCondition;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -40,15 +41,16 @@ import jbse.val.WideningConversion;
 
 final class SlicingManager {
     static String[][] slice(List<Clause> path) { //in this new implementation, the context is also returned
-        final Object[] clauseArray = shorten(path).toArray();
-        final String pathConditionToString = stringifyTestPathCondition(path);
+    	final List<Clause> clauseList = shorten(path);
+        final Object[] clauseArray = clauseList.toArray();
+        //final String pathConditionToString = stringifyTestPathCondition(path);
         //split pc clauses into array
-        final String[] generalArray = pathConditionToString.split(" && ");
-        final String[] specificArray = pathConditionToString.split(" && ");
+        //final String[] generalArray = pathConditionToString.split(" && ");
+        //final String[] specificArray = pathConditionToString.split(" && ");
         //generate general clauses
-        for (int i = 0; i < generalArray.length; ++i){
+        /*for (int i = 0; i < generalArray.length; ++i){
             generalArray[i] = generalArray[i].replaceAll("[0-9]", "");
-        }
+        }*/
         
         final HashSet<String> variableSet = new HashSet<>();
         final String[] clauseArrayInput = new String[clauseArray.length];
@@ -114,12 +116,15 @@ final class SlicingManager {
         final List<String> contextGeneral = new ArrayList<>(); //new, context (general)
 		
         for (int k = 0; k < clauseArrayInput.length; ++k) {
+        	final String specificString = stringifyTestPathCondition(Arrays.asList(clauseList.get(k))); //only the clause at index k is contained
+        	String generalString = specificString; //basically a clone here
+        	generalString = generalString.replaceAll("[0-9]", ""); //now it's general
             if (clauseArrayInput[k] != null) { 
-                valuesSpecific.add(specificArray[k]);
-                valuesGeneral.add(generalArray[k]);
+                valuesSpecific.add(specificString);
+                valuesGeneral.add(generalString);
             } else { //new
-            	contextSpecific.add(specificArray[k]);
-            	contextGeneral.add(generalArray[k]);
+            	contextSpecific.add(specificString);
+            	contextGeneral.add(generalString);
             }
         }
 		

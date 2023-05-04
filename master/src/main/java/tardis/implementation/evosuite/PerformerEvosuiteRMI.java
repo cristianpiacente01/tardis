@@ -146,19 +146,15 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     }
     
     public void registerListener(PerformerEvosuiteListener l) {
-    	LOGGER.info("[begin registerListener]");
     	if (l != null) {
     		listeners.add(l);
     	}
-    	LOGGER.info("[end registerListener]");
     }
     
     private void notifyAllEvosuiteTerminated() {
-    	LOGGER.info("[begin notifyAllEvosuiteTerminated]");
     	for (PerformerEvosuiteListener l: listeners) {
     		l.allEvosuiteTerminated();
     	}
-    	LOGGER.info("[end notifyAllEvosuiteTerminated]");
     }
     
     private static URL toURL(Path path) {
@@ -195,20 +191,15 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	}
 	
 	private void createEvosuiteNodes() throws ClassNotFoundException, MalformedURLException, SecurityException, InterruptedException {
-		LOGGER.info("[begin createEvosuite]");
         final List<String> evosuiteCommand = buildEvoSuiteCommand(); 
         for (int i = 0; i < this.o.getNumOfThreadsEvosuite(); ++i) {
             final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + i + ".txt");
         	launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
         }
         
-        LOGGER.info("[createEvosuite] before while");
-        
         //waits for at least one EvoSuite instance to connect back
         //(ugly spinlock)
         while (this.stopUntilFirstEvosuite) ;
-        
-        LOGGER.info("[end createEvosuite]");
 	}
     
     /**
@@ -323,16 +314,13 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      * @throws IOException if thrown by {@link ProcessBuilder#start()}.
      */
     private static Process launchProcess(List<String> commandLine, Path logFilePath) throws IOException {
-    	LOGGER.info("[begin launchProcess]");
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true).redirectOutput(logFilePath.toFile());
         final Process pr = pb.start();
-        LOGGER.info("[end launchProcess]");
         return pr;
     }
 
     @Override
     protected void executeJob(List<JBSEResult> items) {
-    	LOGGER.info("[begin executeJob]");
     	ArrayList<Pair<JBSEResult, Integer>> compiled = generateWrappers(items);
     	String workerKey = allocateGoalsToSomeEvosuite(compiled);
     	if (this.terminated) {
@@ -340,12 +328,10 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     	} else if (workerKey != null) {
     		sendGoalsToEvosuite(workerKey, compiled);
     	}
-    	LOGGER.info("[end executeJob]");
     }
     
     @Override
     protected void onStop() {
-    	LOGGER.info("[begin onStop]");
 		for (Process process : this.evosuiteProcesses) {
 			try {
 				process.waitFor();
@@ -363,7 +349,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 		} catch (NoSuchObjectException e) {
 			//just ignore
 		}
-		LOGGER.info("[end onStop]");
     }
     
     @Override
@@ -525,7 +510,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
-    	LOGGER.info("[begin checkTestCompileAndScheduleJBSE]");
         //checks if EvoSuite generated the files
         final String testCaseClassName = item.getTargetMethodClassName() + "_" + testCount + "_Test";
         final Path testCaseScaff = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + "_scaffolding.java"));
@@ -537,7 +521,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
             throw new NoTestFileScaffoldingException(testCaseScaff);
         }
         
-        LOGGER.info("[checkTestCompileAndScheduleJBSE] before compiling the test");
 
         //compiles the generated test
         final Path javacLogFilePath = this.o.getTmpTestsDirectoryPath().resolve("javac-log-test-" +  testCount + ".txt");
@@ -558,7 +541,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
             throw new IOFileCreationException(e, javacLogFilePath);
         }
         
-        LOGGER.info("[checkTestCompileAndScheduleJBSE] after compiling the test");
 
         //creates the TestCase and schedules it for further exploration
         try {
@@ -567,7 +549,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
-            LOGGER.info("[end checkTestCompileAndScheduleJBSE]");
             /*if (item.getPathConditionGenerated() == null && !item.isSeed()) {
             	if (this.performerPauseStart == 0) {
             		this.performerPauseStart = System.nanoTime();
@@ -609,10 +590,8 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      */
     private void checkTestExists(String className) 
     throws NoSuchMethodException, SecurityException, NoClassDefFoundError, ClassNotFoundException {
-    	LOGGER.info("[begin checkTestExists]");
         final URLClassLoader cloader = URLClassLoader.newInstance(this.classpathTestURLClassLoader); 
         cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
-        LOGGER.info("[end checkTestExists]");
     }
     
     /**
@@ -624,29 +603,22 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      *        where each {@link JBSEResult} is the result of symbolic execution.
      */
     private ArrayList<Pair<JBSEResult, Integer>> generateWrappers(List<JBSEResult> items) {
-    	LOGGER.info("[begin generateWrappers]");
-    	LOGGER.info("[generateWrappers] items size: %d", items.size());
-        int count = -1;
     	//generates and compiles the wrappers
     	final ArrayList<Pair<JBSEResult, Integer>> compiled = new ArrayList<>();
         for (JBSEResult item : items) {
-        	LOGGER.info("[generateWrappers] item %d", ++count);
             final int testCount = this.testCount.getAndIncrement();
             try {
             	//emits and compiles the wrapper
-            	LOGGER.info("[generateWrappers] before emitting and compiling the wrapper");
             	if (item.isSeed()) {
             		emitAndCompileEvoSuiteWrapperSeed(testCount, item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
             	} else {
             		emitAndCompileEvoSuiteWrapper(testCount, item.getInitialState(), item.getPostFrontierState(), item.getStringLiterals(), item.getStringOthers(), item.getForbiddenExpansions());
             	}
-            	LOGGER.info("[generateWrappers] after emitting and compiling the wrapper");
             	
             	//if emitting the wrapper had success, adds the item to
             	//the list of the compiled items
                 compiled.add(new Pair<>(item, testCount));
                 this.itemsMap.put(testCount, item);
-                LOGGER.info("[end generateWrappers]");
             } catch (CompilationFailedWrapperException e) {
                 LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
                 //falls through

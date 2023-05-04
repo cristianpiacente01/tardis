@@ -10,24 +10,24 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintStream;
+//import java.io.PrintStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
+//import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
+//import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Scanner;
+//import java.util.Scanner;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+//import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -63,7 +63,7 @@ import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.common.NoJavaCompilerException;
-import tardis.implementation.common.Util;
+//import tardis.implementation.common.Util;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
 
@@ -89,7 +89,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     private int testCount;
     private volatile boolean stopForSeeding;
     
-    private static final ConcurrentHashMap<Integer, EvosuiteProcessReport> evosuiteReport = new ConcurrentHashMap<>(); //new, thread-safe
+    //private static final ConcurrentHashMap<Integer, EvosuiteProcessReport> evosuiteReport = new ConcurrentHashMap<>(); //new, thread-safe
     //the key is a test count (can be the initial test count or one of the wrapper's)
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
@@ -435,7 +435,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         	splitItems.add(items.subList((items.size() / this.o.getNumTargetsEvosuitePerJob()) * items.size(), items.size()));
         }
         
-        final Map<Integer, Pair<Process, Thread>> testCountMap = new HashMap<>(); //temp map, to associate a process and thread with a test count
+        //final Map<Integer, Pair<Process, Thread>> testCountMap = new HashMap<>(); //temp map, to associate a process and thread with a test count
 
         //launches an EvoSuite process for each sublist
         final ArrayList<TestDetector> testDetectors = new ArrayList<>();
@@ -446,7 +446,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             final int testCount = testCountStart; //copy into final variable to keep compiler happy
             testCountStart += subItems.size(); //for the next iteration
             
-            final EvosuiteProcessReport currentReport = new EvosuiteProcessReport(testCount, subItems);
+            //final EvosuiteProcessReport currentReport = new EvosuiteProcessReport(testCount, subItems);
             //LOGGER.info("[generateTestsAndScheduleJBSE] Created a report for test count = %d", testCount);
 
             //generates and compiles the wrappers
@@ -456,8 +456,8 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
                 try {
                     emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getPostFrontierState(), item.getStringLiterals(), item.getStringOthers(), item.getForbiddenExpansions());
                     compiled.add(item);
-                    currentReport.wrapperNames.add("EvoSuiteWrapper_" + i + ".java");
-                    PerformerEvosuite.evosuiteReport.put(i, currentReport);
+                    //currentReport.wrapperNames.add("EvoSuiteWrapper_" + i + ".java");
+                    //PerformerEvosuite.evosuiteReport.put(i, currentReport);
                     //LOGGER.info("[generateTestsAndScheduleJBSE] Added EvoSuiteWrapper_%d.java to the report with test count = %d", i, testCount);
                 } catch (CompilationFailedWrapperException e) {
                     LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
@@ -496,7 +496,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             try {
                 evosuiteProcess = launchProcess(evosuiteCommand);
                 processes.add(evosuiteProcess);
-                currentReport.creationTimestamp = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date());
+                //currentReport.creationTimestamp = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date());
                 //assert(PerformerEvosuite.evosuiteReport.containsKey(testCount)); 
                 //I don't need to put testCount, since the first wrapper has the same test count
                 //LOGGER.info("[generateTestsAndScheduleJBSE] Added the report with test count = %d to the evosuiteReport Map", testCount);
@@ -519,7 +519,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
                 tJBSE.start();
                 testDetectors.add(tdJBSE);
                 threads.add(tJBSE);
-                testCountMap.put(testCount, new Pair<>(evosuiteProcess, tJBSE));
+                //testCountMap.put(testCount, new Pair<>(evosuiteProcess, tJBSE));
                 //LOGGER.info("[generateTestsAndScheduleJBSE] Associated a process and a thread with test count = %d", testCount);
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while opening the EvoSuite output file");
@@ -546,7 +546,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             } catch (InterruptedException e) {
                 interrupted = true;
                 thread.interrupt();
-            } finally {
+            } /*finally {
             	for (Map.Entry<Integer, Pair<Process, Thread>> entry : testCountMap.entrySet()) {
                 	if (entry.getValue().second().equals(thread)) {
                 		final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByATestCount(entry.getKey());
@@ -565,7 +565,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
 						}
                 	}
                 }
-            }
+            }*/
         }
         
         //same for processes (safety net)
@@ -579,7 +579,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             } catch (InterruptedException e) {
                 interrupted = true;
                 process.destroy();
-            } finally {
+            } /*finally {
             	for (Map.Entry<Integer, Pair<Process, Thread>> entry : testCountMap.entrySet()) {
                 	if (entry.getValue().first().equals(process)) {
                 		final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByATestCount(entry.getKey());
@@ -600,7 +600,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
                 		}
                 	}
                 }
-            }
+            }*/
         }
     }
 
@@ -727,13 +727,13 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     private ArrayList<String> buildEvoSuiteCommandCommon(String targetClass) {
         final ArrayList<String> retVal = new ArrayList<>();
         retVal.add(this.o.getJava8Command());
-        retVal.add("-Xmx4G");
+        //retVal.add("-Xmx4G");
         retVal.add("-jar");
         retVal.add(this.o.getEvosuitePath().toString());
         retVal.add("-class");
         retVal.add(targetClass);
-        retVal.add("-mem");
-        retVal.add("2048");
+        //retVal.add("-mem");
+        //retVal.add("2048");
         retVal.add("-Dmock_if_no_generator=false");
         retVal.add("-Dreplace_system_in=false");
         retVal.add("-Dreplace_gui=false");
@@ -921,12 +921,12 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
-            if (testCount != 0) { //not seed
+            /*if (testCount != 0) { //not seed
             	final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByATestCount(testCount); //this is a wrapper's test count
             	//assert(report != null);
 	            report.testCasesNames.add(testCaseClassName + ".java");
 	            //LOGGER.info("[checkTestCompileAndScheduleJBSE] Added the test case name = %s to the report with test count = %d", testCaseClassName + ".java", testCount);
-            }
+            }*/
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
@@ -938,7 +938,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     
     //class representing an evosuite report, used for the evosuiteReport Map
     
-    static class EvosuiteProcessReport {
+    /*static class EvosuiteProcessReport {
     	private final int testCount; //identifier for an instance of this class
     	
     	private String creationTimestamp; //formatted string containing the timestamp when the process was created
@@ -1023,11 +1023,11 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
 			return this.testCount == ((EvosuiteProcessReport) obj).testCount;
 		}
     	
-    }
+    }*/
     
     //save an EvosuiteProcessReport to file, it can't be static because it uses the current configuration (tmp directory)
     
-    private void saveEvosuiteProcessReportToFile(EvosuiteProcessReport instance) throws IOFileCreationException {
+    /*private void saveEvosuiteProcessReportToFile(EvosuiteProcessReport instance) throws IOFileCreationException {
     	final Path filePath = this.o.getTmpDirectoryPath().resolve("CUSTOM-evosuite-report-" + instance.testCount + ".txt");
         try (final PrintStream printStream = new PrintStream(Files.newOutputStream(filePath))) {
         	printStream.print(instance.toString());
@@ -1045,16 +1045,16 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         } catch (IOException e) {
             throw new IOFileCreationException(e, filePath);
         }
-    }
+    }*/
     
     //method to get an EvosuiteProcessReport from its test count or a wrapper's test count
     
-    public final static class UtilEvosuiteReport {
+    /*public final static class UtilEvosuiteReport {
     	public static EvosuiteProcessReport getProcessReportByATestCount(int testCount) {
     		//it can be the original testCount or a wrapper's test count (the first wrapper has the same test count of the report anyway)
     		return PerformerEvosuite.evosuiteReport.get(testCount);
         }
-    }
+    }*/
     
     
     

@@ -48,11 +48,9 @@ final class BloomFilter {
         
         final String[] specificInfeasibilityCore = outputSliced[0];
         
-        
         final String[] generalInfeasibilityCore = outputSliced[1];
         
         final String[] specificContext = outputSliced[2];
-        
         
         final String[] generalContext = outputSliced[3];
         
@@ -239,28 +237,28 @@ final class BloomFilter {
 	}
 
     public String getSpecificContextString() {
-    	String retVal = "";
+    	final StringBuilder retVal = new StringBuilder();
     	for (String str : specificContextStrArray) {
-    		if (retVal.isEmpty()) {
-    			retVal = str;
+    		if (retVal.length() == 0) {
+    			retVal.append(str);
     		}
     		else {
-    			retVal += " && " + str;
+    			retVal.append(" && " + str);
     		}
     	}
-    	return retVal;
+    	return retVal.toString();
     }
     
 	public String getSpecificCoreString() {
-    	String retVal = "";
+		final StringBuilder retVal = new StringBuilder();
     	for (String str : specificInfeasibilityCoreStrArray) {
-    		if (retVal.isEmpty()) {
-    			retVal = str;
+    		if (retVal.length() == 0) {
+    			retVal.append(str);
     		}
     		else {
-    			retVal += " && " + str;
+    			retVal.append(" && " + str);
     		}
     	}
-    	return retVal;
+    	return retVal.toString();
     }
 }

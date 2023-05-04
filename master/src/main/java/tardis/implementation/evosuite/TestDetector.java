@@ -11,7 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+//import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,10 +19,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import tardis.Options;
-import tardis.implementation.common.Util;
+//import tardis.implementation.common.Util;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
-import tardis.implementation.evosuite.PerformerEvosuite.EvosuiteProcessReport;
-import tardis.implementation.evosuite.PerformerEvosuite.UtilEvosuiteReport;
+//import tardis.implementation.evosuite.PerformerEvosuite.EvosuiteProcessReport;
+//import tardis.implementation.evosuite.PerformerEvosuite.UtilEvosuiteReport;
 import tardis.implementation.jbse.JBSEResult;
 
 /**
@@ -45,8 +45,8 @@ final class TestDetector implements Runnable {
     private final JBSEResultInputOutputBuffer in;
     
     //used for ground truthing
-    private static AtomicInteger correctEvosuiteFails = new AtomicInteger(0);
-    private static AtomicInteger totalEvosuiteFails = new AtomicInteger(0);
+    /*private static AtomicInteger correctEvosuiteFails = new AtomicInteger(0);
+    private static AtomicInteger totalEvosuiteFails = new AtomicInteger(0);*/
 
     /**
      * Constructor.
@@ -163,7 +163,7 @@ final class TestDetector implements Runnable {
                 //logs the items whose test cases were not generated
                 LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
                 
-                if (this.testCountInitial != 0) {
+                /*if (this.testCountInitial != 0) {
                 	final EvosuiteProcessReport report = UtilEvosuiteReport.getProcessReportByATestCount(this.testCountInitial); 
                 	//initial test count is used here, I could've used testCount too
                 	//assert(report != null);
@@ -171,7 +171,7 @@ final class TestDetector implements Runnable {
                 	//LOGGER.info("[run] EvoSuiteWrapper_%d.java failed, associated with test count initial = %d", testCount, this.testCountInitial);
                 }
                 
-                TestDetector.groundTruthingEvosuiteFail(item);
+                TestDetector.groundTruthingEvosuiteFail(item);*/
                 
                 //learns for update of indices
                 if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
@@ -188,7 +188,7 @@ final class TestDetector implements Runnable {
     }
 
 	//synchronized is needed to avoid wrong values of the counters, since there can be different TestDetector instances accessing at the same time
-	private static synchronized void groundTruthingEvosuiteFail(JBSEResult item) {
+	/*private static synchronized void groundTruthingEvosuiteFail(JBSEResult item) {
 		final int totalEvosuiteFails = TestDetector.totalEvosuiteFails.incrementAndGet();
 		
 		final int correctEvosuiteFails;
@@ -204,6 +204,6 @@ final class TestDetector implements Runnable {
 		}
 		
 		LOGGER.info("[run] Correct Evosuite fails: %d/%d", correctEvosuiteFails, totalEvosuiteFails);
-	}
+	}*/
 }
 

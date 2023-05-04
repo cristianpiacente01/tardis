@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+//import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -31,8 +31,8 @@ final class ClassifierKNN {
     private final HashSet<TrainingItem> trainingSet = new HashSet<>();
     
     //used for ground truthing
-  	private static AtomicInteger correctClassifications = new AtomicInteger(0);
-  	private static AtomicInteger totalClassifications = new AtomicInteger(0);
+  	/*private static AtomicInteger correctClassifications = new AtomicInteger(0);
+  	private static AtomicInteger totalClassifications = new AtomicInteger(0);*/
     
     public ClassifierKNN(int k) {
         this.k = k;
@@ -55,16 +55,16 @@ final class ClassifierKNN {
     	}
     	
     	//used for ground truthing
-    	boolean infeasibleExists = false; //true iff at least an infeasible item is in the training set
+    	//boolean infeasibleExists = false; //true iff at least an infeasible item is in the training set
     	
     	//for every item in the training set, calculate the neighbor's similarity and store it with the label
     	final ArrayList<Neighbor> neighborRanking = new ArrayList<>();
     	
         for (TrainingItem item : this.trainingSet) {
         	//set infeasibleExists to true if there's an infeasible item
-        	if (!infeasibleExists && !item.getLabel()) {
+        	/*if (!infeasibleExists && !item.getLabel()) {
         		infeasibleExists = true;
-        	}
+        	}*/
         	
         	final BloomFilter itemBloomFilter = item.getBloomFilter();
         	
@@ -121,16 +121,16 @@ final class ClassifierKNN {
         	output = ClassificationResult.unknown();
         }
         
-        if (!output.isUnknown() && infeasibleExists) {
+        /*if (!output.isUnknown() && infeasibleExists) {
         	//ground truthing for known classifications and there's at least an infeasible item
         	ClassifierKNN.groundTruthingClassification(query, output, reclassifying);
-        }
+        }*/
         
         return output;
     }
 
     //not synchronized because there's only a classifier instance
-	private static void groundTruthingClassification(BloomFilter query, ClassificationResult output, boolean reclassifying) { 
+	/*private static void groundTruthingClassification(BloomFilter query, ClassificationResult output, boolean reclassifying) { 
 		//the third parameter is for logging purposes
 		
 		final int totalClassifications = ClassifierKNN.totalClassifications.incrementAndGet();
@@ -160,7 +160,7 @@ final class ClassifierKNN {
 		}
 		    
 		LOGGER.info("[classify] Correct classifications: %d/%d", correctClassifications, totalClassifications);
-	}
+	}*/
 
     private static class Neighbor {
     	private final Pair<Double, Double> similarity; //<averageRatio, contextSimilarity>

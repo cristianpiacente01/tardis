@@ -430,7 +430,7 @@ implements PerformerEvosuiteListener {
             //some basic assumptions on model maps, otherwise skips
             synchronized (this.treePath) {
             	if (this.treePath.containsPath(entryPoint, pathConditionGenerated, false)) {
-            		LOGGER.info("From test case %s skipping generated post-frontier path condition %s:%s because redundant", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(pathConditionGenerated));
+            		LOGGER.info("From test case %s skipping generated post-frontier path condition %s:%s because redundant, with %d clauses", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(pathConditionGenerated), shorten(pathConditionGenerated).size());
             		continue;
             	}
             	final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
@@ -453,7 +453,7 @@ implements PerformerEvosuiteListener {
 
             //...and emits it in the output buffer
             this.out.add(output);
-            LOGGER.info("From test case %s generated post-frontier path condition %s:%s%s", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(output), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
+            LOGGER.info("From test case %s generated post-frontier path condition %s:%s%s, with %d clauses", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(output), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""), shorten(pathConditionGenerated).size());
             noOutputJobGenerated = false;
         }
         return noOutputJobGenerated;

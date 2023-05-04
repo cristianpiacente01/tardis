@@ -1,7 +1,6 @@
 package tardis.implementation.data;
 
 import static tardis.implementation.common.Util.filterOnPattern;
-import static tardis.implementation.common.Util.stringifyPostFrontierPathCondition;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+//import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -191,7 +190,31 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     private int trainingSetSize = 0;
     
-    private static final ConcurrentHashMap<String, Boolean> classificationLabels = new ConcurrentHashMap<>(); //new, thread-safe
+    
+    
+    /**
+     * How many possible voting values there are, which go from floor(K/2)+1 to K,
+     * so K - (floor(K/2)+1) + 1 = K - floor(K/2)-1+1 = K - floor(K/2)
+     * 
+     * e.g. if K = 10 then we can have {6,7,8,9,10} so 5
+     * e.g. if K = 11 then we can have {6,7,8,9,10,11} so 6
+     */
+    private static final int NUMBER_OF_POSSIBLE_VOTING = K - K / 2;
+    
+    /**
+     * How many queues are never used, so how many are skipped from the left,
+     * needed to avoid having wrong probabilities when choosing unused queues
+     * 
+     * e.g. if we have K = 1 and 4 queues then offset = 2, so the first two queues aren't used
+     */
+    private final int offset;
+    
+    /**
+     * Length of the sub-array which is actually used, which starts from queueRanking[offset] and ends like queueRanking
+     */
+    private final int newQueueRankingLength;
+    
+    //private static final ConcurrentHashMap<String, Boolean> classificationLabels = new ConcurrentHashMap<>(); //new, thread-safe
     
     public JBSEResultInputOutputBuffer(Options o, TreePath treePath) {
     	this.useIndexImprovability = o.getUseIndexImprovability();
@@ -206,6 +229,37 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         for (int i = 0; i < queueRanking.length; ++i) {
             this.queues.put(i, new LinkedBlockingQueue<>());
         }
+        this.offset = calculateOffset();
+        this.newQueueRankingLength = queueRanking.length - offset;
+    }
+    
+    private int calculateOffset() {
+    	final int offset; //how many queues to skip from the left
+        //to calculate it: it's the number of unused queues (feasible + infeasible)
+        
+        //# unused queues = # queues - # used queues, 
+        //so consider number of possible queues - number of possible voting values
+        	
+        final int unusedFeasibleQueues;
+        final int unusedInfeasibleQueues = (this.queueRanking.length / 2) - NUMBER_OF_POSSIBLE_VOTING;
+        	
+        if (this.queueRanking.length % 2 == 1) { //this is based on the calculation for the number of possible queues
+        	unusedFeasibleQueues = ((this.queueRanking.length / 2) + 1) - NUMBER_OF_POSSIBLE_VOTING;
+        } else {
+        	unusedFeasibleQueues = unusedInfeasibleQueues;
+        }
+        	
+        if (unusedFeasibleQueues + unusedInfeasibleQueues > 0) {
+        	//the linear transformation (used in the updateIndexInfeasibility method) is not surjective
+        	offset = unusedFeasibleQueues + unusedInfeasibleQueues;
+        } else {
+        	//the linear transformation (used in the updateIndexInfeasibility method) is not injective if NUMBER_OF_POSSIBLE_VOTING is too high, 
+        	//so the cardinality of the domain is greater than the codomain's (number of possible queues),
+        	//we don't care about this as long as it's surjective
+        	offset = 0;
+        }
+        
+        return offset;
     }
 
     @Override
@@ -222,9 +276,9 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         	updateIndexInfeasibility(entryPoint, pathCondition, false);
         }
         final int queueNumber = calculateQueueNumber(entryPoint, pathCondition);
-        if (queueRanking[queueNumber] < queueRanking.length - 1) {
+        /*if (queueRanking[queueNumber] < queueRanking.length - 1) {
 			LOGGER.info("Priority path condition with last clause: " + pathCondition.get(pathCondition.size() - 1) + " -- priority=" + queueNumber + " (wrt min priority=" + queueRanking[queueRanking.length - 1] + ")");
-        }
+        }*/
         final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(queueNumber);
         return queue.add(item);
     }
@@ -242,12 +296,11 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         
         //assert (0 < j && j <= INDEX_VALUES.length)
         
-        //TODO remove this if, it's for testing purposes with K = 1
-        synchronized (this) {
+        /*synchronized (this) {
         	if (this.useIndexInfeasibility && (this.queues.get(1).size() != 0 || this.queues.get(0).size() != 0)) {
             	LOGGER.debug("There are %d items in the FEASIBLE queue and %d items in the INFEASIBLE queue", this.queues.get(1).size(), this.queues.get(0).size());
             }
-        }
+        }*/
 
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
         for (int k = 1; k <= n; ++k) {
@@ -414,10 +467,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                     if (queueNumberNew != queueNumber) {
                         this.queues.get(queueNumber).remove(bufferedJBSEResult);
                         this.queues.get(queueNumberNew).add(bufferedJBSEResult);
-                        if (queueNumberNew < queueNumber) {
+                        /*if (queueNumberNew < queueNumber) {
                         	LOGGER.info("[reclassify] New queue number (%d) is lower than the old one (%d), path condition: %s", 
                         			queueNumberNew, queueNumber, stringifyPostFrontierPathCondition(pathCondition));
-                        }
+                        }*/
                     }
                 });
                 this.trainingSetSize = 0;
@@ -508,17 +561,22 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     private int calculateQueueNumber(String entryPoint, List<Clause> path) {
         //gets the indices
-    	final int indexImprovability = this.treePath.getIndexImprovability(entryPoint, path);
+    	/*final int indexImprovability = this.treePath.getIndexImprovability(entryPoint, path);
     	final int indexNovelty = this.treePath.getIndexNovelty(entryPoint, path);
-    	final int indexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
+    	final int indexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);*/
 
 		if (this.useIndexImprovability && !this.useIndexNovelty && !this.useIndexInfeasibility) {
-			return indexImprovability;
+			return this.treePath.getIndexImprovability(entryPoint, path);
 		} else if (!this.useIndexImprovability && this.useIndexNovelty && !this.useIndexInfeasibility) {
-			return indexNovelty;
+			return this.treePath.getIndexNovelty(entryPoint, path);
 		} else if (!this.useIndexImprovability && !this.useIndexNovelty && this.useIndexInfeasibility) {
-			return indexInfeasibility;
+			//this is what I need
+			return this.treePath.getIndexInfeasibility(entryPoint, path);
 		} else {
+			final int indexImprovability = this.treePath.getIndexImprovability(entryPoint, path);
+	    	final int indexNovelty = this.treePath.getIndexNovelty(entryPoint, path);
+	    	final int indexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
+	    	
 			//detects the index that pass a threshold
 			final boolean thresholdImprovability = indexImprovability > 0;
 			final boolean thresholdNovelty = indexNovelty < 2;
@@ -600,62 +658,25 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      *        The first is the closest to the root, the last is the leaf.
      */
     private void updateIndexInfeasibility(String entryPoint, List<Clause> path, boolean reclassifying) { //the third parameter is for logging purposes
+    	//LOGGER.debug("Before getting bloomFilter");
         final BloomFilter bloomFilter = this.treePath.getBloomFilter(entryPoint, path);
         if (bloomFilter == null) {
             throw new AssertionError("Attempted to update the infeasibility index of a path condition that was not yet inserted in the TreePath.");
         }
+        //LOGGER.debug("Before classifying");
         final ClassificationResult result = this.classifier.classify(bloomFilter, reclassifying);
+        //LOGGER.debug("After classifying");
         final boolean unknown = result.isUnknown();
         final boolean feasible = result.getLabel();
         final int voting = result.getVoting();
         
-        if (!reclassifying && !unknown) { //first time classifying this path and not unknown, since unknown classifications aren't stored
+        /*if (!reclassifying && !unknown) { //first time classifying this path and not unknown, since unknown classifications aren't stored
         	UtilClassificationLabels.setClassificationLabel(path, feasible);
-        	/*LOGGER.info("[updateIndexInfeasibility] Changed the classification label of a possible report to %b, PC = %s", feasible,
-        			stringifyPostFrontierPathCondition(path));*/
-        }
-        
-        final int numberOfPossibleVoting = JBSEResultInputOutputBuffer.K - JBSEResultInputOutputBuffer.K / 2;
-    	//how many possible voting values there are,
-    	//which go from floor(K/2)+1 to K,
-        //so K - (floor(K/2)+1) + 1 = K - floor(K/2)-1+1 = K - floor(K/2)
-		
-    	//e.g. if K = 10 then we can have {6,7,8,9,10} so 5
-    	//e.g. if K = 11 then we can have {6,7,8,9,10,11} so 6
-        
-        final int offset; //how many queues to skip from the left
-        //to calculate it: it's the number of unused queues (feasible + infeasible)
-        
-        //# unused queues = # queues - # used queues, 
-        //so consider number of possible queues - number of possible voting values
-        	
-        final int unusedFeasibleQueues;
-        final int unusedInfeasibleQueues = (this.queueRanking.length / 2) - numberOfPossibleVoting;
-        	
-        if (this.queueRanking.length % 2 == 1) { //this is based on the calculation which can be found below
-        	unusedFeasibleQueues = ((this.queueRanking.length / 2) + 1) - numberOfPossibleVoting;
-        } else {
-        	unusedFeasibleQueues = unusedInfeasibleQueues;
-        }
-        	
-        if (unusedFeasibleQueues + unusedInfeasibleQueues > 0) {
-        	//the linear transformation is not surjective
-        	offset = unusedFeasibleQueues + unusedInfeasibleQueues;
-        } else {
-        	//the linear transformation is not injective if numberOfPossibleVoting is too high, 
-        	//so the cardinality of the domain is greater than the codomain's (number of possible queues),
-        	//we don't care about this as long as it's surjective
-        	offset = 0;
-        }
-        
-        //how many queues are never used, so skip them from the left
-        //to avoid having wrong probabilities when choosing unused queues
-        //e.g. if we have K = 1 and 4 queues then offset = 2, so the first two queues aren't used
+        	//LOGGER.info("[updateIndexInfeasibility] Changed the classification label of a possible report to %b, PC = %s", feasible,
+        	//		stringifyPostFrontierPathCondition(path));
+        }*/
         
         //LOGGER.info("[updateIndexInfeasibility] Got offset = %d", offset);
-        
-        final int newQueueRankingLength = this.queueRanking.length - offset; 
-        //length of the sub-array which is actually used, which starts from queueRanking[offset] and ends like queueRanking
         
         final int indexInfeasibility;
         if (unknown) {
@@ -681,7 +702,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         	//if infeasible, how many positions to go back (from the last position)
         	//if feasible, how many positions to go forward (from the first position, which is 0 + offset)
         	
-        	if (numberOfPossibleQueues == 1 || numberOfPossibleVoting == 1) {
+        	if (numberOfPossibleQueues == 1 || NUMBER_OF_POSSIBLE_VOTING == 1) {
         		LOGGER.debug("[updateIndexInfeasibility] There's only 1 possible queue or 1 possible voting value, so newValue = 0");
         		newValue = 0;
         	} else {
@@ -729,13 +750,13 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         
         LOGGER.debug("Got index infeasibility = %d", indexInfeasibility);
         
-        if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
+        /*if (indexInfeasibility != this.queueRanking[offset]) { //priority != max
         	final int oldIndexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
         	if (oldIndexInfeasibility != indexInfeasibility) { //could be the same because this method is invoked in the class PerformerJBSE too
 	        	LOGGER.info("[updateIndexInfeasibility, NOT MAX, unknown = %b, voting = %d, feasible = %b] Changed the infeasibility index from %d to %d, path = %s", 
 	        			unknown, voting, feasible, oldIndexInfeasibility, indexInfeasibility, stringifyPostFrontierPathCondition(path));
         	}
-        }
+        }*/
 		
 		
         this.treePath.setIndexInfeasibility(entryPoint, path, indexInfeasibility);
@@ -773,7 +794,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     
     //a few methods to manage the classificationLabels Map
     
-    public final static class UtilClassificationLabels {
+    /*public final static class UtilClassificationLabels {
     	public static String getLabel(List<Clause> path) {
     		final String pathCondition = stringifyPostFrontierPathCondition(path);
     		if (!JBSEResultInputOutputBuffer.classificationLabels.containsKey(pathCondition)) {
@@ -797,6 +818,6 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     		JBSEResultInputOutputBuffer.classificationLabels.remove(pathCondition);
     	}
     	
-    }
+    }*/
 }
 

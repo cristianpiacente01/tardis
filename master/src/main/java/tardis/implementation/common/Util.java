@@ -281,23 +281,15 @@ public final class Util {
         }
     }
 
-    /**
-     * Converts a path condition to a {@link String}.
-     * 
-     * @param pathCondition a {@link List}{@code <}{@link Clause}{@code >}.
-     * @param generated a {@code boolean}; if {@code true}, the path 
-     *        condition was generated 
-     * @return a {@link String} representation of {@code pathCondition}.
-     * @throws NullPointerException if {@code pathCondition == null}.
-     */
+    //now using only the last clause to test
     private static final String stringifyPathCondition(List<Clause> pathCondition, boolean generated) {
-        final StringBuilder retVal = new StringBuilder();
-        for (int i = 0; i < pathCondition.size(); ++i) {
-            if (i > 0) {
-                retVal.append(" && ");
-            }
-            final Clause c = pathCondition.get(i);
-            if (c instanceof ClauseAssume) {
+    	final StringBuilder retVal = new StringBuilder();
+    	if (pathCondition.size() == 0) {
+    		return retVal.toString(); //just to be sure
+    	}
+    	for (int i = pathCondition.size() - 1; i < pathCondition.size(); ++i) {
+    		final Clause c = pathCondition.get(i);
+    		if (c instanceof ClauseAssume) {
                 final Primitive p = ((ClauseAssume) c).getCondition();
                 if (p instanceof Symbolic) {
                     retVal.append(((Symbolic) p).asOriginString());
@@ -307,7 +299,7 @@ public final class Util {
             } else if (c instanceof ClauseAssumeExpands) {
                 retVal.append(((ClauseAssumeExpands) c).getReference().asOriginString());
                 retVal.append(" fresh ");
-                if (generated && i == pathCondition.size() - 1) {
+                if (generated) {
                     retVal.append("subclass of ");
                     retVal.append(((ClauseAssumeExpands) c).getReference().getStaticType());
                 } else {
@@ -331,11 +323,11 @@ public final class Util {
             } else {
                 retVal.append(c.toString());
             }
-        }
-        return retVal.toString();
+    	}
+    	return retVal.toString();
     }
     
-    public static String stringifyTestPathCondition(List<Clause> pathCondition) {
+    public static String stringifyTestPathCondition(List<Clause> pathCondition) { 
     	return stringifyPathCondition(shorten(pathCondition), false);
     }
 
@@ -360,7 +352,7 @@ public final class Util {
     }
     
     //just for the example MIPC (ManyInfeasiblePC)
-  	public static boolean calculateGroundTruth(String pathCondition) {
+  	/*public static boolean calculateGroundTruth(String pathCondition) {
   		if (pathCondition.contains("null") || pathCondition.contains("aliases") || pathCondition.contains("<(~")) {
   			return false;
   		}
@@ -394,7 +386,7 @@ public final class Util {
   		}
           
   		return true;
-  	}
+  	}*/
     
     /**
      * Do not instantiate!
